@@ -50,18 +50,23 @@ Before reading a single file, line up the right machinery. Use the ones that mat
 
 ### Availability check (do this first)
 
-The skill names companions below that aren't bundled — they may or may not be installed in this environment. **Don't fail silently when they're missing.** Before dispatching anything:
+The skill names companions below that aren't bundled — they may or may not be installed in this environment. **Don't fail silently when they're missing, and don't conflate "not installed" with "I chose not to invoke it."** Those are different things; the reader needs to see them separately. Before dispatching anything:
 
-1. **Scan the current session's available-skills list** (visible in the system reminders / skill picker) for each companion you intend to use. Mark each `available` or `missing`.
-2. **Scan the available subagent list** (visible in the `Agent` tool documentation for this session) the same way.
-3. **Print a one-line banner** at the start of the review:
+1. **Scan the available subagent registry** — the `subagent_type` values the `Agent` tool actually accepts in this session. For each subagent the skill lists, mark `installed` or `not-installed`. (Check `~/.claude/agents/` and the active repo's `.claude/agents/` if you're unsure where they'd come from — the listed names like `code-reviewer`/`security-reviewer` are common-but-not-guaranteed; they come from third-party plugins or per-repo agent files, not bundled with anything by default.)
+2. **Scan the available-skills registry** for each companion skill. Mark `installed` or `not-installed`.
+3. **Decide per installed companion** whether you will *invoke* it for this diff: yes / skip-with-reason. Common skip reasons: budget (e.g. CodeQL on a 28K-line diff isn't worth the runtime cost for a 2-finding pass), manual-walk replacement (the skill's hunt list already covers the same ground for this diff), inline-alternative (e.g. caveman-review's compression can be applied inline rather than via dispatch). Each skip needs a one-phrase reason.
+4. **Print a three-bucket banner** at the start of the review. The buckets are different categories and shouldn't be collapsed:
    ```
-   v-review pre-flight — using: [list]. Missing (skipping): [list]. Install hints in the v-review README.
+   v-review pre-flight
+     • Subagents (Agent tool): dispatched [list-installed-and-invoked]; not installed [list-not-installed]
+     • Skills invoked: [list-installed-and-invoked]
+     • Skills available but not invoked: [list-with-one-phrase-reason-each]
    ```
-4. **Only dispatch what's available.** For each missing companion, the corresponding hunt-list item still gets walked manually — you just lose the parallel-second-opinion or specialist-depth benefit.
-5. **Include the "missing" list in the final output's "Skills + subagents invoked" section** so the author knows which optional checks were skipped and can install them if they want fuller coverage next time.
+   If a bucket is empty, omit that line entirely (no `[]` or "none"). If everything is in one bucket, the banner is one line.
+5. **Only dispatch what's installed-and-invoked.** For each `not-installed` companion, the corresponding hunt-list item still gets walked manually — you lose the parallel-second-opinion or specialist-depth benefit but not the coverage. For each `available-but-not-invoked`, you've made an explicit trade — record the reason so a future reviewer can second-guess it.
+6. **Repeat the same three-bucket breakdown in §2's "Skills + tools used" table** so a reader who skips the banner still sees the taxonomy. Never lump `not-installed` and `available-but-skipped` into a single "Missing" or "Skipped" row.
 
-Never silently swallow a missing companion. The whole point of v-review is to not pass over things — that includes missing tooling.
+**Never silently swallow a missing companion**, and never silently skip an installed one. The whole point of v-review is to not pass over things — that includes missing tooling *and* tooling you chose not to use.
 
 ### Skills to invoke (in order)
 
@@ -75,10 +80,12 @@ Never silently swallow a missing companion. The whole point of v-review is to no
 | `static-analysis:semgrep` | Multi-language diffs or pre-protected-branch merges. |
 | `static-analysis:codeql` | Deeper interprocedural taint/dataflow on security-sensitive code (auth, payments, user-input handling). |
 
-### Subagents to dispatch in parallel
+### Subagents to dispatch in parallel (if installed)
 
-- **`code-reviewer`** — general code quality, an independent second opinion after your own pass.
-- **`security-reviewer`** — OWASP, injection, hardcoded secrets, auth bypasses. **Mandatory** when the diff touches anything security-sensitive (see hunt-list #16).
+These `subagent_type` names are **common in the third-party-plugin ecosystem (superpowers, Cursor, marketplace plugins, per-repo `.claude/agents/` files) but are NOT bundled with anything by default.** Run the availability check above before assuming any of them exist. If absent in this session: fall back to the `Explore` or `general-purpose` subagent with an explicit prompt that pins down what you want it to check (or invoke the closest skill-tool equivalent — `differential-review:differential-review` substitutes for `code-reviewer`/`security-reviewer` in most cases).
+
+- **`code-reviewer`** — general code quality, an independent second opinion after your own pass. (Skill substitute: `differential-review:differential-review`.)
+- **`security-reviewer`** — OWASP, injection, hardcoded secrets, auth bypasses. **Mandatory pass** when the diff touches anything security-sensitive (see hunt-list #16) — if the subagent is absent, the pass must happen via a Skill invocation or via Explore with a security-focused prompt.
 - **Language-specific reviewer** — `csharp-reviewer`, `typescript-reviewer`, `python-reviewer`, etc. Match the diff's primary language.
 - **`database-reviewer`** — migrations, schema mods, query changes.
 - **`aws-reviewer`** / **`gcp-reviewer`** — CDK/CloudFormation/Terraform, IAM, deploy config.
@@ -308,7 +315,7 @@ Everything below is for the author/reviewer dialogue — not the PR comment. Ord
   - **Findings copy uses imperative verbs in the fix half** (`Add`, `Move`, `Delete`, `Extract`, `Inline`, `Rename`, `Mark`, `Replace`, `Reject`, `File issue`, `Revert`, `Wrap`, `Split`, `Combine`). Same rule as §1.
 - **Unfixed CRITICAL/HIGH** listed separately for the user's decision (design-level concerns, architectural calls, risky migrations).
 - **Considered-but-left**, with a one-sentence reason each (e.g. "`DateTime.UtcNow` vs injected `TimeProvider` — codebase uses `DateTime.UtcNow` everywhere; introducing a new abstraction for one file is inconsistent"). This is the future-check operator's signature — the things you *didn't* change tell the reader what the codebase's actual posture is.
-- **Skills + subagents invoked** and their headline outputs (one line each — the user can drill into the full reports if needed).
+- **Skills + tools used** — a three-bucket table mirroring the pre-flight banner: `subagents dispatched`, `skills invoked` (with one-line headline output each), `skills available but not invoked` (with one-phrase skip reason each). `not-installed` subagents go in a fourth row only if their absence materially limited the review. Never collapse the categories.
 - **Exact build + test commands** you ran, with pass/fail.
 - **Trajectory note** when applicable: if the diff establishes a pattern that will compound (e.g. "this is the third hand-rolled retry loop in the codebase — Polly is already configured, recommend a follow-up to consolidate"), call it out. Trajectory is the future-check signal.
 
