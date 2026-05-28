@@ -87,6 +87,7 @@ v-review **suggests but does not auto-install** these. At pre-flight time it che
 | `insecure-defaults:insecure-defaults` | trailofbits plugin | Diff touches config, env vars, secrets, auth setup, service registration. |
 | `static-analysis:semgrep` | trailofbits plugin | Multi-language diffs or pre-protected-branch merges. |
 | `static-analysis:codeql` | trailofbits plugin | Deeper interprocedural taint/dataflow on security-sensitive code. |
+| `caveman:caveman-review` | [caveman](https://github.com/JuliusBrussee/caveman) | **Output compression.** Run on v-review's findings table to distill each row to a one-line `location, problem, fix` — ready to paste as GitHub PR review comments where the verbose markdown table doesn't fit. v-review does the analysis; caveman-review compresses for delivery. Note: caveman-review auto-triggers on "review this PR", so be explicit about which you want when both are installed. |
 
 ### Subagents
 
