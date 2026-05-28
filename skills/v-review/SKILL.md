@@ -1,6 +1,6 @@
 ---
 name: v-review
-description: Use when reviewing a branch, commit, PR, or staged+uncommitted diff before it merges or ships — the "future-check" review pass. Triggers on requests like "review this branch", "review my PR", "look at the diff", "is this ready to merge", and on pre-merge/pre-push gates. Catches what current-check reviews miss: silent failures, cargo additions, duplicate helpers, framework re-implementations, parallel-instance config drift, and dead abstractions. Not for personal-style nits or generated-file-only diffs.
+description: Use when reviewing a branch, commit, PR, or staged+uncommitted diff before it merges or ships — the "future-check" review pass. Triggers on requests like "review this branch", "review my PR", "look at the diff", "is this ready to merge", and on pre-merge/pre-push gates. Catches what current-check reviews miss: silent failures, unjustified additions, duplicate helpers, framework re-implementations, parallel-instance config drift, and dead abstractions. Not for personal-style nits or generated-file-only diffs.
 ---
 
 # v-review
@@ -109,7 +109,7 @@ Project-specific rules **override** anything in this skill where they conflict.
 Walk these against every changed file. Group findings by file. Tag severity per the project's review rule file (typically CRITICAL / HIGH / MEDIUM / LOW). Be opinionated.
 
 1. **Silent catches / fake-handled exceptions. Hard no.** Read the project's `post-review-agent.md` for the full pattern list. Always flag:
-   - `catch (Exception) { LogWarning(...); /* swallow */ }` — narrow to specific exceptions, propagate, or escalate to `LogError` with telemetry. Warning-level on a swallowed exception is the cargo-cult "I caught it but didn't really handle it" pattern.
+   - `catch (Exception) { LogWarning(...); /* swallow */ }` — narrow to specific exceptions, propagate, or escalate to `LogError` with telemetry. Warning-level on a swallowed exception is the "I caught it but didn't really handle it" pattern — exception-handling theatre that imitates handling without doing it.
    - Empty `catch (Exception) {}` — review it like a security vulnerability.
    - `catch (OperationCanceledException) {}` in middleware — let OCE propagate; the host handles cancelled requests.
    - `.catch(() => {})` / `.catch(e => console.warn(...))` in JS/TS — swallows assertion failures, masks bugs. **Banned in tests; suspect in production.**
@@ -124,7 +124,7 @@ Walk these against every changed file. Group findings by file. Tag severity per 
    - Section-divider banners (`// ============ HELPERS ============`) — the type/scope already says that.
    - Apology comments (`// FIXME: I know this is ugly`, `// Sorry for the mess`). Either fix or delete the comment; don't ship the apology.
 
-3. **Cargo additions.** Buffers, retries, timeouts, defaults added without a stated reason — `ThrottleWindow + TimeSpan.FromMinutes(1)`, "extra 30s just in case", `try {} catch { return null; }` "for safety", `if (x is not null && x.Value is not null && x.Value.Length > 0)` chains that mirror nothing the API actually returns. **If you can't defend it in one sentence, drop it.**
+3. **Code added without a stated reason.** Buffers, retries, timeouts, defaults added without a stated reason — `ThrottleWindow + TimeSpan.FromMinutes(1)`, "extra 30s just in case", `try {} catch { return null; }` "for safety", `if (x is not null && x.Value is not null && x.Value.Length > 0)` chains that mirror nothing the API actually returns. **If you can't defend it in one sentence, drop it.**
 
    Also flag: **auto-discovery / reflection-based registration that scans wider than the intended scope.** `WithToolsFromAssembly(...)`, `Assembly.GetTypes()`-style registration loops, `AddControllers()` without an explicit `[ApiController]` filter, `Scrutor.Scan(...).FromCallingAssembly().AddClasses(...)`, MEF/MAF-style `[Export]` scans, any `@autodiscover` / `@register` decorator-based system whose discovery scope is "the whole assembly" or "the whole repo." Any future `[Marker]`-tagged type added anywhere — including in tests, dev tooling, scaffolding, or copy-pasted snippets — registers automatically and ships on the production endpoint without anyone noticing. **Constrain the scan explicitly**: a namespace filter, a marker interface inside an internal namespace, a hand-enumerated list, or at minimum a log at startup naming every type the scan picked up so reviewers can see what's actually wired.
 
@@ -230,7 +230,7 @@ Walk these against every changed file. Group findings by file. Tag severity per 
    - **Hardcoded local-only values**: `localhost`, `127.0.0.1`, personal email addresses, personal absolute paths (`/Users/jane/…`, `/home/alice/…`, `C:\Users\…`), personal API keys/tokens (those also fail hunt #16).
    - **Misleading file/class/function names** that no longer match contents. The feature got renamed; the identifier didn't follow. Rename in the same diff, or open a follow-up issue and link it from a comment.
    - **Case-drift imports.** `import './Foo'` referencing a file actually named `foo.ts`. Works on macOS/Windows case-insensitive filesystems; breaks Linux CI. Walk imports against the actual filenames.
-   - **Empty modules / projects / packages** added "as scaffolding for later." Either land them with content or don't land them. Empty `.csproj` files, empty `__init__.py` modules with no exports, empty React component files, an empty crate in a Cargo workspace — all become cargo-cult targets that future contributors copy-paste into.
+   - **Empty modules / projects / packages** added "as scaffolding for later." Either ship them with content or don't ship them. Empty `.csproj` files, empty `__init__.py` modules with no exports, empty React component files, an empty crate in a Cargo workspace — all become copy-paste targets that future contributors mimic without checking what they should actually contain.
 
 18. **Architecture documentation that contradicts the code.** If the diff adds a SAD / "solution architecture" / "codebase overview" / C4 diagram, read it end-to-end and grep the code for every claim:
    - Pattern names ("Repository Pattern (Generic + Specific)") — does that pattern actually exist?
@@ -312,7 +312,7 @@ Everything below is for the author/reviewer dialogue — not the PR comment. Ord
 - **Pre-flight notes — warnings and skipped checks only.** Do *not* list every passing precondition (clean conflict scan, passing sibling diff, passing procedural sweep) — that's noise the reader has to skim past to reach the findings. List only items that are warnings, skipped checks, missing tooling, or otherwise required the reviewer to do something the reader needs to know about. If every pre-flight item passed, **omit the section entirely**. Example of what *to* surface: `⚠️ subagents differential-review and security-reviewer not registered in this session — walked their hunt-list items manually; coverage is thinner than with them available.` Example of what *not* to surface: `✅ conflict-marker scan: clean`.
 - **Findings table** covering every cleanup, with severity per finding. One row per finding, grouped by file. Severity per the project's rule file (CRITICAL / HIGH / MEDIUM / LOW or equivalent). **Number findings plainly: `1`, `2`, `3`, …** so later sections (trajectory note, follow-up issues, §1 PR comment) can cite them. Do *not* invent opaque prefixes like `F1`, `CR1`, `R-001` — they look like project-specific tracker IDs and confuse the reader. Plain integers, nothing else.
   - **Columns**: `#`, `File:line`, `Severity`, `Pattern`, `Finding`.
-  - **`Pattern` column uses plain-English labels**, not the skill's internal hunt numbers. Catalog: `missing tests`, `duplicated query`, `redundant code`, `silent failure`, `framework drift`, `cascading drift`, `dead code`, `cargo addition`, `UI-only authz`, `hand-edited generated file`, `unsafe migration`, `leftover artifact`, `architecture drift`, `code sweep` (for procedural-sweep catches), `sibling mismatch` (for pairwise-diff catches). Pick the closest label; coin a new plain-English one if none fits. Never write `Hunt #N` or `step Na` in this column — those are internal-to-the-skill, not for the reader.
+  - **`Pattern` column uses plain-English labels**, not the skill's internal hunt numbers. Catalog: `missing tests`, `duplicated query`, `redundant code`, `silent failure`, `framework drift`, `cascading drift`, `dead code`, `unjustified addition`, `UI-only authz`, `hand-edited generated file`, `unsafe migration`, `leftover artifact`, `architecture drift`, `code sweep` (for procedural-sweep catches), `sibling mismatch` (for pairwise-diff catches). Pick the closest label; coin a new plain-English one if none fits. Never write `Hunt #N` or `step Na` in this column — those are internal-to-the-skill, not for the reader.
   - **Findings copy uses imperative verbs in the fix half** (`Add`, `Move`, `Delete`, `Extract`, `Inline`, `Rename`, `Mark`, `Replace`, `Reject`, `File issue`, `Revert`, `Wrap`, `Split`, `Combine`). Same rule as §1.
 - **Unfixed CRITICAL/HIGH** listed separately for the user's decision (design-level concerns, architectural calls, risky migrations).
 - **Considered-but-left**, with a one-sentence reason each (e.g. "`DateTime.UtcNow` vs injected `TimeProvider` — codebase uses `DateTime.UtcNow` everywhere; introducing a new abstraction for one file is inconsistent"). This is the future-check operator's signature — the things you *didn't* change tell the reader what the codebase's actual posture is.
@@ -323,7 +323,7 @@ Everything below is for the author/reviewer dialogue — not the PR comment. Ord
 ## The Iron Law
 
 ```
-NO CARGO ADDITIONS. NO SILENT CATCHES. NO HAND-WRITTEN MIGRATIONS. NO UI-ONLY AUTHZ.
+NO UNJUSTIFIED ADDITIONS. NO SILENT CATCHES. NO HAND-WRITTEN MIGRATIONS. NO UI-ONLY AUTHZ.
 NO EAGER COMMIT — STAGE ONLY.
 ```
 
