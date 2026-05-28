@@ -105,6 +105,11 @@ Walk these against every changed file. Group findings by file. Tag severity per 
 
 2. **Useless comments.** Delete anything that restates what the code does, repeats the test name, or claims behaviour the code doesn't have (`// Strip SQL-Server-specific bits` on an empty override that strips nothing). Keep only comments that capture a non-obvious WHY — an invariant, a hidden constraint, an ordering rationale. **If a comment lies or rots, delete it. Don't translate, don't paraphrase — delete.**
 
+   Also delete on sight:
+   - **Commented-out code blocks.** Git is the version history. Commented-out code is dead weight that rots silently and confuses every future reader who wonders if it's meant to be reactivated. If you need it later, `git log` has it.
+   - Section-divider banners (`// ============ HELPERS ============`) — the type/scope already says that.
+   - Apology comments (`// FIXME: I know this is ugly`, `// Sorry for the mess`). Either fix or delete the comment; don't ship the apology.
+
 3. **Cargo additions.** Buffers, retries, timeouts, defaults added without a stated reason — `ThrottleWindow + TimeSpan.FromMinutes(1)`, "extra 30s just in case", `try {} catch { return null; }` "for safety", `if (x is not null && x.Value is not null && x.Value.Length > 0)` chains that mirror nothing the API actually returns. **If you can't defend it in one sentence, drop it.**
 
 4. **Boolean-flag API smells.** Methods like `BuildContext(bool authenticated)`, `Foo(bool isAdmin)`, `DoThing(bool dryRun)` where the two branches diverge significantly. Split into two named helpers.
@@ -181,7 +186,17 @@ Walk these against every changed file. Group findings by file. Tag severity per 
 
    **If the diff touches any of the above**, dispatch the `security-reviewer` subagent in parallel with your pass.
 
-17. **Architecture documentation that contradicts the code.** If the diff adds a SAD / "solution architecture" / "codebase overview" / C4 diagram, read it end-to-end and grep the code for every claim:
+17. **Leftover artifacts.** Things that should never reach review but routinely do:
+   - **Debug print statements** in non-debug code: `console.log`, `Console.WriteLine`, `print()`, `dump()`, `pp`, `dd()`, `var_dump`, `println!`, `eprintln!`. Replace with proper structured logging or delete.
+   - **`TODO` / `FIXME` / `XXX` / `HACK` without owner *and* date.** They rot into permanent fixtures. Rule: fix now, file an issue and link it (`// TODO(#1234, alice, 2026-05): …`), or delete. An undated TODO is a lie about future work.
+   - **Disabled tests** (`.skip`, `xit`, `it.todo`, `[Ignore]`, `[Skip]`, `@pytest.mark.skip`, `@Disabled`, `t.Skip()`) without a justification comment naming the bug/issue. A silently-skipped test is a test you don't have — and the next reader has no way to know whether it's safe to re-enable.
+   - **OS / IDE / editor artifacts** committed: `.DS_Store`, `Thumbs.db`, `desktop.ini`, `.idea/`, personal `.vscode/settings.json`, `*.swp`, `*.bak`, `*.orig` (the latter often a leftover from a merge tool). Move to `.gitignore` and delete from the tree.
+   - **Hardcoded local-only values**: `localhost`, `127.0.0.1`, personal email addresses, personal absolute paths (`/Users/jane/…`, `/home/alice/…`, `C:\Users\…`), personal API keys/tokens (those also fail hunt #16).
+   - **Misleading file/class/function names** that no longer match contents. The feature got renamed; the identifier didn't follow. Rename in the same diff, or open a follow-up issue and link it from a comment.
+   - **Case-drift imports.** `import './Foo'` referencing a file actually named `foo.ts`. Works on macOS/Windows case-insensitive filesystems; breaks Linux CI. Walk imports against the actual filenames.
+   - **Empty modules / projects / packages** added "as scaffolding for later." Either land them with content or don't land them. Empty `.csproj` files, empty `__init__.py` modules with no exports, empty React component files, an empty crate in a Cargo workspace — all become cargo-cult targets that future contributors copy-paste into.
+
+18. **Architecture documentation that contradicts the code.** If the diff adds a SAD / "solution architecture" / "codebase overview" / C4 diagram, read it end-to-end and grep the code for every claim:
    - Pattern names ("Repository Pattern (Generic + Specific)") — does that pattern actually exist?
    - Library versions (`Rebus 8.4.1`) — match `Directory.Packages.props` / `package.json` / `pyproject.toml`?
    - Identity provider (`ASP.NET Core Identity` vs `Auth0`) — match the actual auth wiring?
@@ -191,6 +206,11 @@ Walk these against every changed file. Group findings by file. Tag severity per 
 ## Process
 
 1. **Scope.** `git fetch origin && git diff origin/<base>...HEAD --stat`. If reviewing a PR by number: `gh pr view <n> --json title,body,labels,comments` for the business context — external-tool reviewers (Codex/Gemini/OpenCode if you fan out to them) can't read the repo, so the PR title/body is their only intent signal.
+1a. **Hard preconditions — fail fast.** Before walking anything, scan the diff for unresolved git conflict markers:
+   ```bash
+   git diff origin/<base>...HEAD | grep -nE '^\+(<{7}|={7}|>{7})( |$)' && echo "CONFLICT MARKERS PRESENT"
+   ```
+   Any hit = **hard stop**. Return immediately with the list of offending files; refuse to proceed. Reviewing a diff that contains conflict markers is reviewing nothing — the code in the diff doesn't compile, doesn't run, and any further finding is downstream of an unresolved merge.
 2. **Read every changed file end-to-end, not just the diff hunks.** The diff hides context. The 1,000-line god component shows itself only in the full file.
 3. **Decide which pre-flight skills + subagents to fan out to** (security-review when auth touched; finding-duplicate-functions when new services; insecure-defaults when config; semgrep when multi-language). Run in parallel where possible — single message, multiple `Agent`/`Skill` invocations.
 4. **For each finding, log concretely**: `file:line — problem — fix`. Group by file so you can edit each once. Tag severity per the project's review rule file.
