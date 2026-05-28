@@ -261,9 +261,30 @@ Walk these against every changed file. Group findings by file. Tag severity per 
 
 ## Output
 
-After fixes are staged, return:
+Two sections, in this order — the compressed block first so it's paste-ready into a PR comment without scrolling.
 
-- **`Was → Now` table** covering every cleanup, with severity per finding. One row per finding, grouped by file. Severity per the project's rule file (CRITICAL / HIGH / MEDIUM / LOW or equivalent). **Number findings plainly: `1`, `2`, `3`, …** so later sections (trajectory note, follow-up issues, cross-references) can cite them. Do *not* invent opaque prefixes like `F1`, `CR1`, `R-001` — they look like project-specific tracker IDs and confuse the reader. Plain integers, nothing else.
+### 1. Paste-ready PR comment block (always first, always at the top)
+
+A `caveman-review`-style compressed block — one verdict line, then one numbered line per finding. Format per line: `N. <file>:L<lines>: <severity-emoji> <severity-word>: <problem>. <fix>.` Use the same plain integers as the full-review table (see §2) so the two sections cross-reference. Severity emoji: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🔵 LOW. No throat-clearing, no prose, no per-line "consider" or "you might want to". Designed to paste directly into a GitHub PR review comment.
+
+If `caveman:caveman-review` is installed (see availability check), you *may* dispatch it to do the compression; otherwise apply the same one-line-per-finding rule inline. The block must exist either way.
+
+Example:
+```
+v-review verdict: dish, not meatball. Land with 1, 4, 5; file follow-ups for 2, 3, 6, 7, 8.
+
+1. PR-wide: 🟡 MEDIUM: no tests added for silent-bug fix + new feature. Add a bUnit or Playwright case before merge.
+2. ProductDialog.razor:L296-302: 🔵 LOW: 4th site loading company-with-countries (EditCompany:L639, AddNewRequest:L153, CreateNewProject:L509). Extract `CompanyQueries.GetWithCountriesAsync(ids)`.
+…
+```
+
+Then a horizontal rule (`---`), then §2.
+
+### 2. Full review (verbose, below the compressed block)
+
+Everything below is for the author/reviewer dialogue — not the PR comment. Order:
+
+- **`Was → Now` table** covering every cleanup, with severity per finding. One row per finding, grouped by file. Severity per the project's rule file (CRITICAL / HIGH / MEDIUM / LOW or equivalent). **Number findings plainly: `1`, `2`, `3`, …** so later sections (trajectory note, follow-up issues, §1 PR comment) can cite them. Do *not* invent opaque prefixes like `F1`, `CR1`, `R-001` — they look like project-specific tracker IDs and confuse the reader. Plain integers, nothing else.
 - **Unfixed CRITICAL/HIGH** listed separately for the user's decision (design-level concerns, architectural calls, risky migrations).
 - **Considered-but-left**, with a one-sentence reason each (e.g. "`DateTime.UtcNow` vs injected `TimeProvider` — codebase uses `DateTime.UtcNow` everywhere; introducing a new abstraction for one file is inconsistent"). This is the future-check operator's signature — the things you *didn't* change tell the reader what the codebase's actual posture is.
 - **Skills + subagents invoked** and their headline outputs (one line each — the user can drill into the full reports if needed).
