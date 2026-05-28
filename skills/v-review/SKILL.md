@@ -112,6 +112,8 @@ Walk these against every changed file. Group findings by file. Tag severity per 
 
 3. **Cargo additions.** Buffers, retries, timeouts, defaults added without a stated reason — `ThrottleWindow + TimeSpan.FromMinutes(1)`, "extra 30s just in case", `try {} catch { return null; }` "for safety", `if (x is not null && x.Value is not null && x.Value.Length > 0)` chains that mirror nothing the API actually returns. **If you can't defend it in one sentence, drop it.**
 
+   Also flag: **auto-discovery / reflection-based registration that scans wider than the intended scope.** `WithToolsFromAssembly(...)`, `Assembly.GetTypes()`-style registration loops, `AddControllers()` without an explicit `[ApiController]` filter, `Scrutor.Scan(...).FromCallingAssembly().AddClasses(...)`, MEF/MAF-style `[Export]` scans, any `@autodiscover` / `@register` decorator-based system whose discovery scope is "the whole assembly" or "the whole repo." Any future `[Marker]`-tagged type added anywhere — including in tests, dev tooling, scaffolding, or copy-pasted snippets — registers automatically and ships on the production endpoint without anyone noticing. **Constrain the scan explicitly**: a namespace filter, a marker interface inside an internal namespace, a hand-enumerated list, or at minimum a log at startup naming every type the scan picked up so reviewers can see what's actually wired.
+
 4. **Boolean-flag API smells.** Methods like `BuildContext(bool authenticated)`, `Foo(bool isAdmin)`, `DoThing(bool dryRun)` where the two branches diverge significantly. Split into two named helpers.
 
 5. **Redundant or unverified DI / service registrations.** Before adding *any* new service registration, verify **two** things:
@@ -138,7 +140,27 @@ Walk these against every changed file. Group findings by file. Tag severity per 
    - **Tell-tale: a hand-rolled helper appears alongside the new instance** that re-implements something the framework would normally do (manual claim string-matching instead of `User.IsInRole`, manual JSON parsing instead of model binding, manual log enrichment, manual retry loop). That helper exists *because* the new instance is mis-configured and the standard mechanism returned nothing useful. **Don't accept the helper — fix the instance's options to match its sibling.**
    - **Severity minimum HIGH for auth/identity drift** (silent role bypass when a future caller adds `[Authorize(Roles=...)]`); **MEDIUM for behaviour drift** (HTTP/serialization/DB instances that disagree under edge conditions).
 
+   **Cascade analysis — required when the missing/divergent option is identity-mapping or framework behaviour the codebase reads via a shared abstraction.** When you find that a new instance is missing an option, the local workaround is the tip; the cascade through dependent middleware, interceptors, audit-field providers, cache services, and provisioning hooks is the iceberg. **Grep every consumer of the affected primitive and check whether each one survives the new scheme.**
+
+   Concrete examples of what to grep when the missing option is:
+   - **`RoleClaimType` / `NameClaimType` / `MapInboundClaims`** → grep `IsInRole(`, `Identity.Name`, `Identity?.Name`, `User.FindFirst(ClaimTypes.Role)`, audit-field providers (`ICurrentUser*`, `*UserContext`, `*Principal*`), any DB interceptor that reads the principal, any `ISkin*UserService` / `ICurrentUser*` / `IAuditContext` consumer. Each one breaks on the new scheme.
+   - **`Events.OnTokenValidated`** (user provisioning, role sync, account creation) → the new scheme that lacks the hook means JWT-only callers never get an `ApplicationUser`/`AspNetUsers` row, never have roles synced to local Identity tables, and never have downstream foreign-key fields (e.g. `CompanyId` on the local user row) populated. Latent asymmetry — works in dev, breaks the first time a write tool hits the schema.
+   - **`HttpClient` handler chain / Polly resilience pipeline** → grep for the existing `AddHttpClient<T>().AddHttpMessageHandler<X>()` registration; if the new client doesn't replicate the chain, retries/circuit-breakers/correlation-id propagation silently disappear on the new path.
+   - **`JsonSerializerOptions`** → grep `JsonSerializer.Deserialize`/`Serialize` call sites and any model-binding configuration. A new options instance with different naming policy means the same payload deserializes differently depending on which call site reads it.
+
+   The pattern: if a hand-rolled workaround appears alongside the new instance, that workaround is the *visible* symptom of a cascade. Find the rest before signing off.
+
 6. **Duplicated / re-invented helpers (textbook).** Before writing new claim-reading, user-context, DB-access, company-scoping, file-validation, or string-normalisation code, `grep` the existing pattern. The codebase has a helper for this already 80% of the time.
+
+   **Cross-layer authority rule (access-control / scoping / authorization specifically):** when reviewing access-control or scoping logic on a new endpoint, service, tool, handler, or background worker, the authoritative spec almost always lives in one of two places already:
+   - **The existing service layer** — `*Service`, `*Provider`, `*Repository`, `*AccessHelper`, `*Authorization*` classes that other features already route through. These encapsulate the canonical scope predicate, role checks, soft-delete and status filters, and cross-account access-grant joins.
+   - **The Client / UI / Razor / route-handler code** that already enforces the same thing for human users. Pages and components are often the *de-facto* spec because product owners verify them by clicking.
+
+   Read both before accepting any new scoping code. The new code must match — *and if it doesn't match, the deviation is almost certainly the bug.* Especially watch for:
+   - **Narrower scope predicates** than the canonical one (e.g. 3-of-5 company foreign keys when the Client uses 5-of-5) — false negatives now, and a silent data-leak the moment someone "fixes" the predicate to match without porting the rest of the gating.
+   - **Missing cross-account access-grant joins** (e.g. `AccessControl` / shared-with-company / delegated-permission tables ignored).
+   - **Missing fine-grained gating** the Client layers on top (per-part approvals, per-field visibility, per-status redaction) — exposing the parent record without porting these is a data exposure even if the top-level scope matches.
+   - **Missing status / lifecycle filters** (archived, deleted, off-market, draft, soft-deleted) that the canonical layer applies. A new endpoint that returns archived/off-market rows is leaking data the UI deliberately hides.
 
 7. **Duplicate functions in disguise — semantic, not textual.** Two functions with different names that do the same thing. LLM-generated code is especially prone. Run `superpowers-lab:finding-duplicate-functions` or at minimum pattern-match: if `IsCompanyOwner(user, companyId)` exists, don't accept new `UserBelongsToCompany(user, companyId)`.
 
@@ -213,7 +235,25 @@ Walk these against every changed file. Group findings by file. Tag severity per 
    Any hit = **hard stop**. Return immediately with the list of offending files; refuse to proceed. Reviewing a diff that contains conflict markers is reviewing nothing — the code in the diff doesn't compile, doesn't run, and any further finding is downstream of an unresolved merge.
 2. **Read every changed file end-to-end, not just the diff hunks.** The diff hides context. The 1,000-line god component shows itself only in the full file.
 3. **Decide which pre-flight skills + subagents to fan out to** (security-review when auth touched; finding-duplicate-functions when new services; insecure-defaults when config; semgrep when multi-language). Run in parallel where possible — single message, multiple `Agent`/`Skill` invocations.
+3a. **Sibling pairwise diff — when the diff adds N near-identical things.** Eight MCP tools, five route handlers, four migration files, three new background services, six new test classes. Don't read them all front-to-back and call it done — put them side-by-side and diff their structure. Differences between siblings are *either intentional (need a comment) or unintentional (the bug)*. Specifically compare across the set:
+   - **Query options**: `AsNoTracking()`/`AsTracking()`, `AsSplitQuery()`, `IgnoreQueryFilters()`, command timeout, retry policy.
+   - **Input validation**: empty/null/whitespace handling, length caps, value clamping (`Math.Clamp`), allowlist/denylist, type coercion (`int.TryParse`).
+   - **Scope predicates**: number of fields in the WHERE clause, soft-delete/status filters, cross-account grants — *if one sibling has 5 fields and another has 3, that's a finding, not a coincidence.*
+   - **Error / not-found shape**: same response payload, same HTTP status, same logging level, same exception type.
+   - **Authorization gates**: same `[Authorize]` policy, same role check, same claim requirement.
+   - **Logging**: same scope, same correlation-id propagation, same redaction.
+
+   The fastest way: open the N files in a tiled view (or `diff -y file1 file2`) and walk top-to-bottom. Anything that doesn't line up is a finding candidate.
 4. **For each finding, log concretely**: `file:line — problem — fix`. Group by file so you can edit each once. Tag severity per the project's review rule file.
+4a. **Procedural checklist sweep — don't trust memory of the hunt list.** Before declaring the finding set complete, walk every *new type* the diff introduces and check explicitly:
+   - **Sealing**: `sealed` / `final` / `@frozen` on every public class/type not designed for inheritance (hunt #12).
+   - **Mutability**: `readonly` on every constructor-assigned field; `private set` or init-only on every property not externally mutated.
+   - **Visibility**: `internal` (or stricter) on anything not consumed across the assembly boundary; `private` on anything not consumed across the type boundary.
+   - **Static**: every method that doesn't read `this` should be `static`.
+   - **Async**: every `Task`/`Task<T>`-returning method takes a `CancellationToken`; every `await` has `.ConfigureAwait(false)` in library code (or the project's documented convention).
+   - **Disposability**: every `IDisposable`/`IAsyncDisposable` consumer either `using`s or registers ownership.
+
+   Do this as an explicit sweep, not from memory. Hunt items rot in the head; the diff doesn't lie.
 5. **Apply the fixes.** Don't ask permission for mechanical cleanups — the user wants to see the result. Do ask for design-level changes (HIGH-or-above architectural calls).
 6. **Build the affected project**, e.g. `dotnet build <project>.csproj --nologo` / `npm run build` / `cargo check`. Resolve real errors. LSP staleness errors after a fresh merge usually resolve after a `dotnet restore --force-evaluate` / `npm ci` / `cargo clean && cargo build`.
 7. **Run tests touching the changed code**, e.g. `dotnet test --filter "FullyQualifiedName~<TestClassYouAffected>"` / `npx playwright test tests/<file>.spec.ts`. Must be green. If you changed a behaviour test, the test needs to change with it — and the new test must actually exercise the new behaviour (see hunt #11).
