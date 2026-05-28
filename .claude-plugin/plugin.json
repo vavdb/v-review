@@ -1,6 +1,6 @@
 {
   "name": "v-review",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks a 17-item hunt list (silent catches, cargo additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.), dispatches security and language-specific reviewers in parallel, stages fixes, refuses to commit eagerly. Suggests (does not auto-install) companion skills and subagents — see README for the recommended list.",
   "author": {
     "name": "vavdb",

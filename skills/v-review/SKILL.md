@@ -55,18 +55,19 @@ The skill names companions below that aren't bundled — they may or may not be 
 1. **Scan the available subagent registry** — the `subagent_type` values the `Agent` tool actually accepts in this session. For each subagent the skill lists, mark `installed` or `not-installed`. (Check `~/.claude/agents/` and the active repo's `.claude/agents/` if you're unsure where they'd come from — the listed names like `code-reviewer`/`security-reviewer` are common-but-not-guaranteed; they come from third-party plugins or per-repo agent files, not bundled with anything by default.)
 2. **Scan the available-skills registry** for each companion skill. Mark `installed` or `not-installed`.
 3. **Decide per installed companion** whether you will *invoke* it for this diff: yes / skip-with-reason. Common skip reasons: budget (e.g. CodeQL on a 28K-line diff isn't worth the runtime cost for a 2-finding pass), manual-walk replacement (the skill's hunt list already covers the same ground for this diff), inline-alternative (e.g. caveman-review's compression can be applied inline rather than via dispatch). Each skip needs a one-phrase reason.
-4. **Print a three-bucket banner** at the start of the review. The buckets are different categories and shouldn't be collapsed:
+4. **Print the pre-flight summary** at the start of the review, with one line per group below. Groups are separate things — never combine "not installed" with "installed but I didn't use it":
    ```
    v-review pre-flight
-     • Subagents (Agent tool): dispatched [list-installed-and-invoked]; not installed [list-not-installed]
-     • Skills invoked: [list-installed-and-invoked]
-     • Skills available but not invoked: [list-with-one-phrase-reason-each]
+     • Subagents ran: [list]
+     • Subagents missing: [list]
+     • Skills ran: [list]
+     • Skills installed but not used: [list with a short reason each]
    ```
-   If a bucket is empty, omit that line entirely (no `[]` or "none"). If everything is in one bucket, the banner is one line.
-5. **Only dispatch what's installed-and-invoked.** For each `not-installed` companion, the corresponding hunt-list item still gets walked manually — you lose the parallel-second-opinion or specialist-depth benefit but not the coverage. For each `available-but-not-invoked`, you've made an explicit trade — record the reason so a future reviewer can second-guess it.
-6. **Repeat the same three-bucket breakdown in §2's "Skills + tools used" table** so a reader who skips the banner still sees the taxonomy. Never lump `not-installed` and `available-but-skipped` into a single "Missing" or "Skipped" row.
+   If a group is empty, drop that line entirely (no `[]` and no "none"). If only one group has anything in it, the summary is one line.
+5. **Only run what's installed and chosen.** For each missing companion, walk the matching hunt-list item by hand — you lose the parallel second opinion but not the coverage. For each "installed but not used", you made a choice — write down the reason so a later reviewer can question it.
+6. **Repeat the same four-group breakdown in §2's "Skills + tools used" table** so a reader who skips the summary still sees what was and wasn't used. Never put `missing` and `installed but not used` in one row.
 
-**Never silently swallow a missing companion**, and never silently skip an installed one. The whole point of v-review is to not pass over things — that includes missing tooling *and* tooling you chose not to use.
+**Never silently drop a missing companion**, and never silently skip an installed one. The point of v-review is to not pass over things — including missing tools *and* tools you chose not to run.
 
 ### Skills to invoke (in order)
 
@@ -288,7 +289,7 @@ A `caveman-review`-style compressed block. Two parts:
 
 **No throat-clearing, no prose, no per-line "consider" or "you might want to".** Designed to paste directly into a GitHub PR review comment without editing.
 
-**Vocabulary to avoid (reviewer jargon that reads as opaque to non-reviewers):** `fold in` (write `add to this PR`); `land` (write `merge`); `ship it` (write `merge`); `site` to mean "place in code" (write `place` or `call site`); `dish` / `meatball` / `cargo` as standalone framings (the skill body describes the underlying symptoms; the output should name them directly). Also: never write `Hunt #N` or `step Na` in output — those are skill-internal references, not for the reader.
+**Vocabulary to avoid (jargon that reads as opaque to non-reviewers):** `fold in` (write `add to this PR`); `land` (write `merge`); `ship it` (write `merge`); `site` to mean "place in code" (write `place` or `call site`); `bucket` to mean "group" or "category" (write the plain word); `dispatched` / `dispatch` (write `ran` or `invoked`); `registered` / `registry` (write `installed` / `list of installed X`); `mandated` (write `required`); `ecosystem` (write `plugins` or `set of tools`); `dish` / `meatball` / `cargo` as standalone framings (name the underlying symptom directly). Also: never write `Hunt #N` or `step Na` in output — those are skill-internal references, not for the reader. **And: do not apply this same jargon in the prose around the output.** If the skill body itself slips into jargon, fix it.
 
 If `caveman:caveman-review` is installed (see availability check), you *may* dispatch it to do the compression; otherwise apply these rules inline. The block must exist either way.
 
