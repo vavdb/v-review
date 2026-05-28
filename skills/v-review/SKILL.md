@@ -29,14 +29,20 @@ When NOT to use:
 - Diff is generated files only (ModelSnapshot, lock files, designer.cs, openapi-generated/, etc.)
 - Personal-style preference where the codebase already has a consistent convention (e.g. don't introduce `TimeProvider` if `DateTime.UtcNow` is the established pattern)
 
-## The dish vs the meatball — what you're scoring against
+## What you're scoring every new file against
 
-Same framework, same year, same affordances. One file ages into a boring CRUD page nobody fears. The other ages into the file nobody dares touch. The variable is the operator behind the diff:
+One axis: **does the diff reach for framework affordances only when the platform earns them, and otherwise stay plain?** Or **does it pile heavy primitives, hand-rolled helpers, and multiple opinions onto the same class without using the framework patterns that already exist?** The second shape is what fails review — not for size, but as **residue of sessions that did not read each other**.
 
-- **Dish** — framework idioms when needed, plain code otherwise. Reaches for `IDbContextFactory`, `OwnsMany`, `ExecuteUpdateAsync`, scoped CSS, structured logging, `[Authorize]` policies **only when the platform earns it**. Stops there.
-- **Meatball** — every new ask landed as a field on the same class. Reaches for heavy primitives reflexively where they aren't needed, and bypasses the framework's offered patterns where they would help. Manual JSON parsing alongside `System.Text.Json`. Two consistency models in one method (`SaveChangesAsync` + `ExecuteUpdateAsync` on a row already tracked). Comma-delimited string of IDs where a join table belongs. Two opinions per field — null-conditional in render, non-null in handler.
+Symptoms that the second shape is forming in the diff:
 
-Score every new file on this axis. A meatball doesn't fail review for *size*; it fails for **residue of sessions that did not read each other**.
+- Every new ask landing as another field on an existing class instead of as its own component/service.
+- Heavy framework primitives reached for reflexively where simpler code would do (e.g. `IDbContextFactory` per upload that doesn't need a separate scope).
+- At the same time, *bypassing* offered framework patterns where they would help (e.g. component-scoped CSS, structured logging, `[Authorize]` policies, `System.Text.Json`).
+- Two consistency models in one method (e.g. `SaveChangesAsync` + `ExecuteUpdateAsync` on a row already tracked).
+- Hand-rolled storage for data the schema would model better (a comma-delimited string of IDs where a join table belongs).
+- Two opinions on the same field in one file (null-conditional in render, non-null in handler).
+
+When you see these, the diff is on a trajectory that compounds. Call it out.
 
 ## Pre-flight — skills, subagents, rule files
 
@@ -271,7 +277,7 @@ If `caveman:caveman-review` is installed (see availability check), you *may* dis
 
 Example:
 ```
-v-review verdict: dish, not meatball. Land with 1, 4, 5; file follow-ups for 2, 3, 6, 7, 8.
+v-review verdict: ready to land with 1, 4, 5; file follow-ups for 2, 3, 6, 7, 8.
 
 1. PR-wide: 🟡 MEDIUM: no tests added for silent-bug fix + new feature. Add a bUnit or Playwright case before merge.
 2. ProductDialog.razor:L296-302: 🔵 LOW: 4th site loading company-with-countries (EditCompany:L639, AddNewRequest:L153, CreateNewProject:L509). Extract `CompanyQueries.GetWithCountriesAsync(ids)`.
@@ -284,6 +290,7 @@ Then a horizontal rule (`---`), then §2.
 
 Everything below is for the author/reviewer dialogue — not the PR comment. Order:
 
+- **Pre-flight notes — warnings and skipped checks only.** Do *not* list every passing precondition (clean conflict scan, passing sibling diff, passing procedural sweep) — that's noise the reader has to skim past to reach the findings. List only items that are warnings, skipped checks, missing tooling, or otherwise required the reviewer to do something the reader needs to know about. If every pre-flight item passed, **omit the section entirely**. Example of what *to* surface: `⚠️ subagents differential-review and security-reviewer not registered in this session — walked their hunt-list items manually; coverage is thinner than with them available.` Example of what *not* to surface: `✅ conflict-marker scan: clean`.
 - **`Was → Now` table** covering every cleanup, with severity per finding. One row per finding, grouped by file. Severity per the project's rule file (CRITICAL / HIGH / MEDIUM / LOW or equivalent). **Number findings plainly: `1`, `2`, `3`, …** so later sections (trajectory note, follow-up issues, §1 PR comment) can cite them. Do *not* invent opaque prefixes like `F1`, `CR1`, `R-001` — they look like project-specific tracker IDs and confuse the reader. Plain integers, nothing else.
 - **Unfixed CRITICAL/HIGH** listed separately for the user's decision (design-level concerns, architectural calls, risky migrations).
 - **Considered-but-left**, with a one-sentence reason each (e.g. "`DateTime.UtcNow` vs injected `TimeProvider` — codebase uses `DateTime.UtcNow` everywhere; introducing a new abstraction for one file is inconsistent"). This is the future-check operator's signature — the things you *didn't* change tell the reader what the codebase's actual posture is.
@@ -318,11 +325,11 @@ If you catch yourself thinking any of these, you're doing a current-check, not a
 
 | Excuse | Reality |
 |--------|---------|
-| "Code review passed, build is green, tests pass." | A reviewed-and-green diff can still be a meatball — tests can assert that LINQ exists, builds compile around UI-only authz, reviewers can rubber-stamp 200-file PRs. Pass means nothing without the second optimisation. |
+| "Code review passed, build is green, tests pass." | A reviewed-and-green diff can still ship the wrong thing — tests can assert that LINQ exists, builds compile around UI-only authz, reviewers can rubber-stamp 200-file PRs. Pass means nothing without the second optimisation. |
 | "We can clean it up later." | Six months later, migration #6 is migration #36, half of them defensive raw SQL. The clean-up cost compounds; the dirty-add cost is one PR. Fix now is cheaper than fix later, always. |
 | "AI generated it, that's the new normal." | AI optimises for the current check. You're the second optimisation. If you abdicate, the file becomes the file nobody dares touch. |
 | "The author already pushed back on review." | Push back again. Push back with file:line and the rule it violates. Politeness isn't the goal; the codebase is. |
-| "Style isn't worth blocking on." | Selective styleguide bypass is how the second meatball gets onto the same plate. Same diff, two patterns, no consistency — the next contributor copies whichever they happened to land on. |
+| "Style isn't worth blocking on." | Selective styleguide bypass is how inconsistency compounds. Same diff, two patterns, no consistency — the next contributor copies whichever they happened to land on. |
 | "It works in the demo / local / staging." | "It works" is the cheapest claim in software. Show it works under concurrent writes, on the cold path, with the wrong claims, with a malformed upload. |
 | "Authorization is enforced by the UI." | Authenticated user + curl = pwn. Always check the service + controller. UI-only authz is the #1 failure pattern in outsourced features. |
 | "The reviewer's nitpicks are slowing us down." | The reviewer's nitpicks are the only thing keeping the 11x year from inverting into the cleanup year. Slowing down is the work. |
