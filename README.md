@@ -34,7 +34,31 @@ git clone https://github.com/vavdb/v-review.git /tmp/v-review-src
 cp -r /tmp/v-review-src/skills/v-review ~/.claude/skills/v-review
 ```
 
-After install, restart Claude Code and the skill registers as `v-review`. Trigger it with any of:
+After install, restart Claude Code and the skill registers as `v-review`.
+
+### Installing the recommended companions
+
+**`/plugin install vavdb/v-review` does NOT auto-install the companions listed in [Recommended companions](#recommended-companions)** — Claude Code's plugin manager doesn't read the `recommendedCompanions` field in `.claude-plugin/plugin.json` for dependency resolution. v-review degrades gracefully when they're missing (the pre-flight availability check prints which are available and which it's skipping), but you get fuller coverage with them installed.
+
+Two ways to install them:
+
+**1. Tell Claude to do it in natural language.** In a fresh session after installing v-review, say something like:
+
+> install vavdb/v-review's recommended companion plugins
+
+Claude reads the README's Recommended companions table and runs `/plugin install <each>` for the ones you don't already have. Not a built-in plugin-manager command — just NL plus Claude reading documentation.
+
+**2. Install each plugin yourself.** From inside Claude Code:
+
+```
+/plugin install thedotmack/claude-mem
+/plugin install obra/superpowers
+/plugin install obra/superpowers-lab
+/plugin install trailofbits/claude-plugins-official        # provides differential-review, insecure-defaults, static-analysis
+/plugin install JuliusBrussee/caveman                       # provides caveman-review
+```
+
+(Exact plugin/marketplace names may vary as those projects evolve — verify the source URLs in the table before installing.) Trigger it with any of:
 
 - `/v-review`
 - "review this branch"
