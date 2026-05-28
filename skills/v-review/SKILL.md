@@ -271,16 +271,27 @@ Two sections, in this order — the compressed block first so it's paste-ready i
 
 ### 1. Paste-ready PR comment block (always first, always at the top)
 
-A `caveman-review`-style compressed block — one verdict line, then one numbered line per finding. Format per line: `N. <file>:L<lines>: <severity-emoji> <severity-word>: <problem>. <fix>.` Use the same plain integers as the full-review table (see §2) so the two sections cross-reference. Severity emoji: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🔵 LOW. No throat-clearing, no prose, no per-line "consider" or "you might want to". Designed to paste directly into a GitHub PR review comment.
+A `caveman-review`-style compressed block. Two parts:
 
-If `caveman:caveman-review` is installed (see availability check), you *may* dispatch it to do the compression; otherwise apply the same one-line-per-finding rule inline. The block must exist either way.
+**Lead line — count-shape summary.** Tell the reader the *shape* of the review in one line, with concrete numbers. Pattern: `**N findings** — X to add to this PR, Y to file as separate issues, Z blockers.` (If `Z = 0`, write "no blockers" rather than "0 blockers".) Reader knows what they're in for within one line, without scanning the list.
+
+**Then one numbered line per finding.** Format: `N. <file>:L<lines>: <severity-emoji> <severity-word>: <problem>. <imperative-fix>.` Plain integers — never opaque prefixes like `F1`/`CR1`/`R-001`. Severity emoji: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🔵 LOW. Same numbers as the §2 findings table so the two sections cross-reference.
+
+**Every fix half must start with an imperative verb** so the reader sees the action immediately. Catalog: `Add`, `Move`, `Delete`, `Extract`, `Inline`, `Rename`, `Mark`, `Replace`, `Reject`, `File issue`, `Revert`, `Wrap`, `Split`, `Combine`. Avoid passive prescriptions like "Pick one layer", "Let X own", "Consider refactoring", "Maybe rework".
+
+**No throat-clearing, no prose, no per-line "consider" or "you might want to".** Designed to paste directly into a GitHub PR review comment without editing.
+
+**Vocabulary to avoid (reviewer jargon that reads as opaque to non-reviewers):** `fold in` (write `add to this PR`); `land` (write `merge`); `ship it` (write `merge`); `site` to mean "place in code" (write `place` or `call site`); `dish` / `meatball` / `cargo` as standalone framings (the skill body describes the underlying symptoms; the output should name them directly). Also: never write `Hunt #N` or `step Na` in output — those are skill-internal references, not for the reader.
+
+If `caveman:caveman-review` is installed (see availability check), you *may* dispatch it to do the compression; otherwise apply these rules inline. The block must exist either way.
 
 Example:
 ```
-v-review verdict: ready to land with 1, 4, 5; file follow-ups for 2, 3, 6, 7, 8.
+**8 findings** — 3 to add to this PR, 5 to file as separate issues. No blockers.
 
-1. PR-wide: 🟡 MEDIUM: no tests added for silent-bug fix + new feature. Add a bUnit or Playwright case before merge.
-2. ProductDialog.razor:L296-302: 🔵 LOW: 4th site loading company-with-countries (EditCompany:L639, AddNewRequest:L153, CreateNewProject:L509). Extract `CompanyQueries.GetWithCountriesAsync(ids)`.
+1. PR-wide: 🟡 MEDIUM: no tests for silent bug fix + new region picker. Add a bUnit or Playwright case before merge.
+2. ProductDialog.razor:L296-302: 🔵 LOW: 4th place in the codebase loading company-with-countries (also EditCompany:L639, AddNewRequest:L153, CreateNewProject:L509). Extract `CompanyQueries.GetWithCountriesAsync(ids)`.
+3. ProductDialog.razor:L296-304, L334: 🔵 LOW: duplicated dedup — runs 2-3× across server query + `AddCountries` filter. Delete server `GroupBy`; let `AddCountries` handle uniqueness alone.
 …
 ```
 
