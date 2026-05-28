@@ -263,7 +263,7 @@ Walk these against every changed file. Group findings by file. Tag severity per 
 
 After fixes are staged, return:
 
-- **`Was → Now` table** covering every cleanup, with severity per finding. One row per finding, grouped by file. Severity per the project's rule file (CRITICAL / HIGH / MEDIUM / LOW or equivalent).
+- **`Was → Now` table** covering every cleanup, with severity per finding. One row per finding, grouped by file. Severity per the project's rule file (CRITICAL / HIGH / MEDIUM / LOW or equivalent). **Number findings plainly: `1`, `2`, `3`, …** so later sections (trajectory note, follow-up issues, cross-references) can cite them. Do *not* invent opaque prefixes like `F1`, `CR1`, `R-001` — they look like project-specific tracker IDs and confuse the reader. Plain integers, nothing else.
 - **Unfixed CRITICAL/HIGH** listed separately for the user's decision (design-level concerns, architectural calls, risky migrations).
 - **Considered-but-left**, with a one-sentence reason each (e.g. "`DateTime.UtcNow` vs injected `TimeProvider` — codebase uses `DateTime.UtcNow` everywhere; introducing a new abstraction for one file is inconsistent"). This is the future-check operator's signature — the things you *didn't* change tell the reader what the codebase's actual posture is.
 - **Skills + subagents invoked** and their headline outputs (one line each — the user can drill into the full reports if needed).
