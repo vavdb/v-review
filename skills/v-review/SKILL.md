@@ -42,6 +42,21 @@ Score every new file on this axis. A meatball doesn't fail review for *size*; it
 
 Before reading a single file, line up the right machinery. Use the ones that match the changes; don't run all of them on every diff.
 
+### Availability check (do this first)
+
+The skill names companions below that aren't bundled — they may or may not be installed in this environment. **Don't fail silently when they're missing.** Before dispatching anything:
+
+1. **Scan the current session's available-skills list** (visible in the system reminders / skill picker) for each companion you intend to use. Mark each `available` or `missing`.
+2. **Scan the available subagent list** (visible in the `Agent` tool documentation for this session) the same way.
+3. **Print a one-line banner** at the start of the review:
+   ```
+   v-review pre-flight — using: [list]. Missing (skipping): [list]. Install hints in the v-review README.
+   ```
+4. **Only dispatch what's available.** For each missing companion, the corresponding hunt-list item still gets walked manually — you just lose the parallel-second-opinion or specialist-depth benefit.
+5. **Include the "missing" list in the final output's "Skills + subagents invoked" section** so the author knows which optional checks were skipped and can install them if they want fuller coverage next time.
+
+Never silently swallow a missing companion. The whole point of v-review is to not pass over things — that includes missing tooling.
+
 ### Skills to invoke (in order)
 
 | Skill | When |

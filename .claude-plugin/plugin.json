@@ -1,7 +1,7 @@
 {
   "name": "v-review",
-  "version": "0.1.0",
-  "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks a 17-item hunt list (silent catches, cargo additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.), dispatches security and language-specific reviewers in parallel, stages fixes, refuses to commit eagerly.",
+  "version": "0.2.0",
+  "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks a 17-item hunt list (silent catches, cargo additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.), dispatches security and language-specific reviewers in parallel, stages fixes, refuses to commit eagerly. Suggests (does not auto-install) companion skills and subagents — see README for the recommended list.",
   "author": {
     "name": "vavdb",
     "url": "https://github.com/vavdb"
@@ -18,5 +18,25 @@
     "audit",
     "pre-merge",
     "pre-push"
-  ]
+  ],
+  "recommendedCompanions": {
+    "skills": [
+      "claude-mem:mem-search",
+      "superpowers:systematic-debugging",
+      "superpowers-lab:finding-duplicate-functions",
+      "differential-review:differential-review",
+      "insecure-defaults:insecure-defaults",
+      "static-analysis:semgrep",
+      "static-analysis:codeql"
+    ],
+    "subagents": [
+      "code-reviewer",
+      "security-reviewer",
+      "database-reviewer",
+      "csharp-reviewer",
+      "typescript-reviewer",
+      "python-reviewer"
+    ],
+    "note": "Not auto-installed. v-review probes availability at pre-flight and degrades gracefully when missing. See README for install hints."
+  }
 }

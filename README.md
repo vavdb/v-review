@@ -72,6 +72,36 @@ your-repo/
 
 The skill cross-references these on every invocation. If a project doesn't have them, v-review falls back to its general hunt list.
 
+## Recommended companions
+
+v-review **suggests but does not auto-install** these. At pre-flight time it checks which are available in your session, prints a `using: … / missing: …` banner, and gracefully degrades on the missing ones. Install them up-front if you want full coverage.
+
+### Skills
+
+| Skill | Plugin/source | What v-review uses it for |
+|---|---|---|
+| `claude-mem:mem-search` | [claude-mem](https://github.com/thedotmack/claude-mem) | First-pass: was this work attempted before? Prior decisions, abandoned approaches, known landmines. |
+| `superpowers:systematic-debugging` | [superpowers](https://github.com/obra/superpowers) | When the diff is a fix — was the root cause identified, or was a symptom patched? |
+| `superpowers-lab:finding-duplicate-functions` | [superpowers-lab](https://github.com/obra/superpowers-lab) | Catches semantic duplicates with different names — the LLM-generated "re-implementation instead of reuse" case. |
+| `differential-review:differential-review` | trailofbits plugin | Non-trivial diff — blast-radius scoring, git-history context, test-coverage check. |
+| `insecure-defaults:insecure-defaults` | trailofbits plugin | Diff touches config, env vars, secrets, auth setup, service registration. |
+| `static-analysis:semgrep` | trailofbits plugin | Multi-language diffs or pre-protected-branch merges. |
+| `static-analysis:codeql` | trailofbits plugin | Deeper interprocedural taint/dataflow on security-sensitive code. |
+
+### Subagents
+
+Subagent availability depends on your setup — they're typically defined in `~/.claude/agents/` or `.claude/agents/` in the project.
+
+| Subagent | What v-review dispatches it for |
+|---|---|
+| `code-reviewer` | General code quality — independent second opinion after the skill's own pass. |
+| `security-reviewer` | OWASP, injection, hardcoded secrets, auth bypasses. Mandatory when the diff touches anything security-sensitive. |
+| `csharp-reviewer` / `typescript-reviewer` / `python-reviewer` / etc. | Stack-specific anti-patterns matched to the diff's primary language. |
+| `database-reviewer` | Migrations, schema mods, query changes. |
+| `aws-reviewer` / `gcp-reviewer` | IaC, IAM, deploy configs. |
+
+If a recommended subagent doesn't exist in your environment, v-review walks the corresponding hunt-list item manually — you just lose the parallel-second-opinion benefit.
+
 ## When NOT to use
 
 - Single-line typo, README polish, dependency bump with no code change.
