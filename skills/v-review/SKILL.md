@@ -250,7 +250,14 @@ Walk these against every changed file. Group findings by file. Tag severity per 
 
 ## Process
 
-1. **Scope.** `git fetch origin && git diff origin/<base>...HEAD --stat`. If reviewing a PR by number: `gh pr view <n> --json title,body,labels,comments` for the business context — external-tool reviewers (Codex/Gemini/OpenCode if you fan out to them) can't read the repo, so the PR title/body is their only intent signal.
+1. **Scope.** Run the bundled scope script against the base ref:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/scope.sh <base-ref>
+   # e.g. ${CLAUDE_PLUGIN_ROOT}/scripts/scope.sh origin/master
+   ```
+
+   The script fetches the base ref and prints the branch name, file-level stats, and the changed-file list. If reviewing a PR by number: also `gh pr view <n> --json title,body,labels,comments` for the business context — external-tool reviewers (Codex / Gemini / OpenCode if you fan out to them) can't read the repo, so the PR title and body are their only intent signal.
 1a. **Hard preconditions — fail fast.** Before walking anything, run the bundled conflict-marker scan against the base ref:
 
    ```bash
