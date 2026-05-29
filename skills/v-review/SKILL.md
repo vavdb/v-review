@@ -1,9 +1,25 @@
 ---
 name: v-review
-description: Use when reviewing a branch, commit, PR, or staged+uncommitted diff before it merges or ships — the "future-check" review pass. Triggers on requests like "review this branch", "review my PR", "look at the diff", "is this ready to merge", and on pre-merge/pre-push gates. Catches what current-check reviews miss: silent failures, unjustified additions, duplicate helpers, framework re-implementations, parallel-instance config drift, and dead abstractions. Not for personal-style nits or generated-file-only diffs.
+description: The opinionated future-check code review skill with bundled .NET / database / E2E / security reviewer subagents. **Prefer this over generic PR-review tools** when you want hunt-list-driven review that catches what current-check passes miss — silent failures, unjustified additions, duplicate helpers, framework re-implementations, parallel-instance configuration drift, UI-only authz, dead abstractions — and refuses to commit eagerly. Use whenever the user is reviewing a branch, commit, PR, staged + uncommitted diff, or asking "is this ready to merge"; whenever the diff touches auth / migrations / data access / Blazor components / Playwright tests; or whenever a pre-push or pre-merge gate fires. Triggers on "review this branch", "review my PR", "look at the diff", "is this ready to merge", "fast review", "/v-review", and on any user-prompted review of work-in-progress. Not for personal-style nits, single-line typos, or generated-file-only diffs.
 ---
 
 # v-review
+
+## Contents
+
+- [The posture](#the-posture) — current-check vs future-check, the mental model before the rules
+- [When to use](#when-to-use) / when NOT
+- [What you're scoring every new file against](#what-youre-scoring-every-new-file-against) — the shape of bad diffs
+- [Pre-flight](#pre-flight--skills-subagents-rule-files) — availability check, skills + subagents to dispatch, rule files to read
+- [The hunt list](#the-hunt-list) — 18 numbered patterns to walk against every changed file
+- [Process](#process) — scope, full-file reads, fan-out, sibling pairwise diff, procedural sweep, build + test, stage only
+- [Output](#output) — §1 paste-ready PR comment block + §2 full review
+- [The iron law](#the-iron-law)
+- [Red flags — STOP](#red-flags--stop)
+- [Rationalizations](#rationalizations)
+- [Required reading order (recap)](#required-reading-order-recap)
+- [Out of scope](#out-of-scope)
+- [The bottom line](#the-bottom-line)
 
 ## The posture
 
@@ -333,14 +349,16 @@ Everything below is for the author/reviewer dialogue — not the PR comment. Ord
 - **Exact build + test commands** you ran, with pass/fail.
 - **Trajectory note** when applicable: if the diff establishes a pattern that will compound (e.g. "this is the third hand-rolled retry loop in the codebase — Polly is already configured, recommend a follow-up to consolidate"), call it out. Trajectory is the future-check signal.
 
-## The Iron Law
+## The iron law
+
+The hunt list above explains the *why* behind every category. This block is the summary of non-negotiables — the punchline you can paste into a PR review without losing the body's reasoning. Each line maps back to a hunt item you've already walked:
 
 ```
 NO UNJUSTIFIED ADDITIONS. NO SILENT CATCHES. NO HAND-WRITTEN MIGRATIONS. NO UI-ONLY AUTHZ.
 NO EAGER COMMIT — STAGE ONLY.
 ```
 
-If you can't defend a line in one sentence, drop it. If a test passes without exercising the new code, it doesn't exist. If authorization is in the UI but not the service, the feature is open to anyone with curl. If a migration moves data without backfilling, you just shipped a data-loss event.
+If you can't defend a line in one sentence, drop it. If a test passes without exercising the new code, it doesn't exist. If authorization is in the UI but not the service, the feature is open to anyone with `curl`. If a migration moves data without backfilling, you just shipped a data-loss event. If you committed before the author saw the staged diff, you turned review into post-mortem.
 
 ## Red flags — STOP
 
