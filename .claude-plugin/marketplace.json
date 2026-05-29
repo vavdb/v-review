@@ -1,0 +1,45 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "vavdb",
+  "owner": {
+    "name": "Vincent van den Braken",
+    "url": "https://github.com/vavdb"
+  },
+  "metadata": {
+    "description": "Single-plugin marketplace shipping v-review — the future-check code review skill with bundled .NET / data-access / E2E / security reviewer subagents.",
+    "version": "0.8.1",
+    "homepage": "https://github.com/vavdb/v-review"
+  },
+  "plugins": [
+    {
+      "name": "v-review",
+      "source": "./",
+      "version": "0.8.1",
+      "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks an 18-item hunt list (silent failures, unjustified additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.) and dispatches five bundled subagents in parallel: csharp-reviewer, database-reviewer (in-code data access), database-schema-reviewer (schema design), playwright-test-reviewer (E2E discipline), security-reviewer (mandatory cascade-analysis security pass).",
+      "author": {
+        "name": "Vincent van den Braken",
+        "url": "https://github.com/vavdb"
+      },
+      "homepage": "https://github.com/vavdb/v-review",
+      "license": "MIT",
+      "category": "code-review",
+      "keywords": [
+        "code-review",
+        "pr-review",
+        "diff-review",
+        "security",
+        "static-analysis",
+        "review",
+        "audit",
+        "pre-merge",
+        "pre-push",
+        "dotnet",
+        "csharp",
+        "blazor",
+        "mudblazor",
+        "ef-core",
+        "playwright"
+      ]
+    }
+  ]
+}

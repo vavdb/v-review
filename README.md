@@ -18,18 +18,23 @@ The skill is **opinionated**. It refuses additions with no stated reason, calls 
 
 ## Install
 
-### As a Claude Code plugin
+### As a Claude Code plugin (recommended)
 
-```bash
-# from Claude Code:
+The repository ships its own single-plugin marketplace, so a one-liner resolves cleanly:
+
+```
 /plugin install vavdb/v-review
 ```
 
+This clones the repo, registers the `vavdb` marketplace, installs the `v-review` plugin, and exposes the bundled subagents (`csharp-reviewer`, `database-reviewer`, `database-schema-reviewer`, `playwright-test-reviewer`, `security-reviewer`) without further steps. Restart Claude Code if it doesn't pick the plugin up immediately.
+
 ### Manually (clone + symlink)
+
+If the one-liner fails or you want a checked-out copy you can edit:
 
 ```bash
 git clone https://github.com/vavdb/v-review.git ~/.claude/plugins/v-review
-# or, install the single skill globally:
+# or, install just the orchestrator skill globally (without the bundled subagents):
 git clone https://github.com/vavdb/v-review.git /tmp/v-review-src
 cp -r /tmp/v-review-src/skills/v-review ~/.claude/skills/v-review
 ```

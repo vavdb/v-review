@@ -1,6 +1,6 @@
 {
   "name": "v-review",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks an 18-item hunt list (silent failures, unjustified additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.), runs security and language-specific reviewers in parallel where available, stages fixes, refuses to commit eagerly. Bundles five subagents — `csharp-reviewer`, `database-reviewer` (in-code data access), `database-schema-reviewer` (schema design), `playwright-test-reviewer` (E2E test discipline), `security-reviewer` (mandatory security pass with cascade analysis); suggests (does not auto-install) other companion skills and subagents — see README for the recommended list.",
   "author": {
     "name": "vavdb",
