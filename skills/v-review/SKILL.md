@@ -251,11 +251,14 @@ Walk these against every changed file. Group findings by file. Tag severity per 
 ## Process
 
 1. **Scope.** `git fetch origin && git diff origin/<base>...HEAD --stat`. If reviewing a PR by number: `gh pr view <n> --json title,body,labels,comments` for the business context — external-tool reviewers (Codex/Gemini/OpenCode if you fan out to them) can't read the repo, so the PR title/body is their only intent signal.
-1a. **Hard preconditions — fail fast.** Before walking anything, scan the diff for unresolved git conflict markers:
+1a. **Hard preconditions — fail fast.** Before walking anything, run the bundled conflict-marker scan against the base ref:
+
    ```bash
-   git diff origin/<base>...HEAD | grep -nE '^\+(<{7}|={7}|>{7})( |$)' && echo "CONFLICT MARKERS PRESENT"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/conflict-marker-scan.sh <base-ref>
+   # e.g. ${CLAUDE_PLUGIN_ROOT}/scripts/conflict-marker-scan.sh origin/master
    ```
-   Any hit = **hard stop**. Return immediately with the list of offending files; refuse to proceed. Reviewing a diff that contains conflict markers is reviewing nothing — the code in the diff doesn't compile, doesn't run, and any further finding is downstream of an unresolved merge.
+
+   Any non-zero exit = **hard stop**. Return immediately with the offending paths the script printed; refuse to proceed. Reviewing a diff that contains conflict markers is reviewing nothing — the code in the diff doesn't compile, doesn't run, and any further finding is downstream of an unresolved merge.
 2. **Read every changed file end-to-end, not just the diff hunks.** The diff hides context. The 1,000-line god component shows itself only in the full file.
 3. **Decide which pre-flight skills + subagents to fan out to** (security-review when auth touched; finding-duplicate-functions when new services; insecure-defaults when config; semgrep when multi-language). Run in parallel where possible — single message, multiple `Agent`/`Skill` invocations.
 3a. **Sibling pairwise diff — when the diff adds N near-identical things.** Eight MCP tools, five route handlers, four migration files, three new background services, six new test classes. Don't read them all front-to-back and call it done — put them side-by-side and diff their structure. Differences between siblings are *either intentional (need a comment) or unintentional (the bug)*. Specifically compare across the set:
