@@ -57,6 +57,7 @@ Plugins (one `/plugin install` per line, from inside Claude Code):
 /plugin install obra/superpowers-lab                         # finding-duplicate-functions
 /plugin install trailofbits/claude-plugins-official          # differential-review, insecure-defaults, static-analysis
 /plugin install anthropics/claude-plugins                    # microsoft-docs ← .NET / Azure / EF Core verification
+/plugin install pr-review-toolkit@claude-plugins-official    # silent-failure-hunter, comment-analyzer, pr-test-analyzer, type-design-analyzer
 /plugin install JuliusBrussee/caveman                         # caveman-review
 ```
 
@@ -150,6 +151,10 @@ Subagent availability depends on your setup — they're typically defined in `~/
 | `playwright-test-reviewer` | ✅ Yes (`agents/playwright-test-reviewer.md`) | **E2E test discipline** for Playwright suites driving Blazor Server + MudBlazor. Bans force clicks / shotgun timeouts / retry loops / silent catches / `networkidle` / bare `page.goto`. Enforces semantic-selector hierarchy, fixture imports from project fixtures (not `@playwright/test` directly), after-action assertions, MudBlazor timing patterns (`fill + Tab`, snackbar wait before goto), test/component `data-testid` consistency. Fires on `tests/**/*.spec.ts`, `*-fixtures.ts`, `playwright.config.ts`. Pairs with `csharp-reviewer` on the markup side. |
 | `security-reviewer` | ✅ Yes (`agents/security-reviewer.md`) | **Mandatory security pass** with cascade analysis. Walks v-review SKILL.md §16 (UI-only authz across razor + service + controller, parallel-instance auth config drift with full consumer-cascade, audit-field source, SQL parameterisation, file upload validation, multi-tenant scope, CSRF / antiforgery, XSS via `MarkupString`, secrets in source, weak crypto / RNG, shown-once API-key contracts, data-destructive migrations). Strict by default; dispatches semgrep / codeql / insecure-defaults in parallel where available rather than duplicating pattern matching. Fires whenever the diff touches auth / input / DB / file / external API / crypto / payment / secrets. |
 | `code-reviewer` | ❌ No — install separately | General code quality — independent second opinion after the skill's own pass. |
+| `silent-failure-hunter` | ❌ No — install via Anthropic's `pr-review-toolkit` plugin | Second opinion **specifically on hunt #1** (silent catches / exception theatre / inappropriate fallback). Same posture as v-review on this category. Strong companion when the diff includes try/catch or fallback logic. |
+| `comment-analyzer` | ❌ No — install via Anthropic's `pr-review-toolkit` plugin | Second opinion **specifically on hunt #2** (comment accuracy + comment rot). Verifies claims against the code. Especially valuable for XML doc comments on public API surface, which are part of the contract — lying docs are worse than no docs. |
+| `pr-test-analyzer` | ❌ No — install via Anthropic's `pr-review-toolkit` plugin | Second opinion **specifically on hunt #11** (test smells + coverage gaps). Behavioral-coverage focus, not line coverage. Complements `playwright-test-reviewer` (E2E) by covering unit + integration test gaps. |
+| `type-design-analyzer` | ❌ No — install via Anthropic's `pr-review-toolkit` plugin | Second opinion on new types added in the diff. Rates types on 4 axes (encapsulation, invariant expression, usefulness, enforcement). Advisory, not strict. |
 | `typescript-reviewer` / `python-reviewer` / etc. | ❌ No — install separately | Stack-specific anti-patterns matched to the diff's primary language. |
 | `aws-reviewer` / `gcp-reviewer` | ❌ No — install separately | IaC, IAM, deploy configs. |
 

@@ -1,6 +1,6 @@
 {
   "name": "v-review",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks an 18-item hunt list (silent failures, unjustified additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.), runs security and language-specific reviewers in parallel where available, stages fixes, refuses to commit eagerly. Bundles five subagents — `csharp-reviewer`, `database-reviewer` (in-code data access), `database-schema-reviewer` (schema design), `playwright-test-reviewer` (E2E test discipline), `security-reviewer` (mandatory security pass with cascade analysis); suggests (does not auto-install) other companion skills and subagents — see README for the recommended list.",
   "author": {
     "name": "vavdb",
@@ -43,7 +43,11 @@
     "subagents": [
       "code-reviewer",
       "typescript-reviewer",
-      "python-reviewer"
+      "python-reviewer",
+      "silent-failure-hunter",
+      "comment-analyzer",
+      "pr-test-analyzer",
+      "type-design-analyzer"
     ],
     "note": "Not auto-installed. v-review probes availability at pre-flight and degrades gracefully when missing. Five subagents are BUNDLED with v-review and auto-available when the plugin is installed: `csharp-reviewer` (agents/csharp-reviewer.md), `database-reviewer` (agents/database-reviewer.md — in-code data access), `database-schema-reviewer` (agents/database-schema-reviewer.md — schema design), `playwright-test-reviewer` (agents/playwright-test-reviewer.md — E2E test discipline), `security-reviewer` (agents/security-reviewer.md — mandatory security pass with cascade analysis). See README for install hints on the rest."
   }
