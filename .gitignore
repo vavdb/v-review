@@ -3,3 +3,6 @@
 .vscode/
 *.swp
 node_modules/
+
+# skill-creator optimizer outputs (regenerable, large, contain run logs)
+.planning/optimization-output/

@@ -1,0 +1,22 @@
+[
+  {"query": "review this branch before I push it to develop — it's the auth migration we've been working on, mostly Program.cs + AuthenticationExtensions.cs + a new MCP scheme. Want to make sure I haven't drifted from the existing JWT scheme's options.", "should_trigger": true},
+  {"query": "is this PR ready to merge? It's https://github.com/skinconsult/skinny-app/pull/4279 — adds Hangfire orphan-queue cleanup. CI is green but I want a second pass before I hit merge.", "should_trigger": true},
+  {"query": "look at the staged diff — about to commit but want to make sure the migration is safe. It adds a NOT NULL CompanyId column to about 8 entities and I'm worried about lock duration.", "should_trigger": true},
+  {"query": "can you do a quick review of the changes in OrderService.cs and OrderRepository.cs? I refactored the bulk-insert path to use ExecuteUpdateAsync and I want to make sure I didn't break the audit-field interceptor.", "should_trigger": true},
+  {"query": "I'm about to push 14 files for the new file-upload feature. UploadController.cs, Pages/Admin/Upload.razor, tests/admin-upload.spec.ts. Walk it with me — I'm pretty sure I forgot CSRF.", "should_trigger": true},
+  {"query": "give me a future-check pass on the staged stuff — Vincent's hunt list style. About 600 lines of diff across Services/, Migrations/, and a couple of Razor pages.", "should_trigger": true},
+  {"query": "PR review please, deep mode. /v-review --deep on PR #3828.", "should_trigger": true},
+  {"query": "before I open this PR, can you walk the diff with v-review and tell me what to fix? It's a bunch of EF Core query changes — I added .AsSplitQuery() in a few places and I'm not sure if I justified it well.", "should_trigger": true},
+  {"query": "pre-push gate: review the branch fix-4103-bulk-ai-skip-done-claims against develop and stop the push if there are CRITICAL findings", "should_trigger": true},
+  {"query": "do the future-check thing on this commit — I haven't pushed yet. It's adding the database-schema-reviewer to v-review. Want a second pass before I merge to master.", "should_trigger": true},
+  {"query": "review my essay for grammar issues — it's 800 words about the importance of test-driven development", "should_trigger": false},
+  {"query": "can you review the architecture diagram I drew? It's a Mermaid block I added to docs/architecture.md showing how the new MCP server fits into the existing Aspire AppHost setup.", "should_trigger": false},
+  {"query": "review this slack message draft before I send it to the team — want to make sure the tone is right. 'Hey folks, heads up that the auth migration lands tomorrow morning...'", "should_trigger": false},
+  {"query": "look at this commit message I wrote and tell me if it follows our conventional-commits style — 'fix: silly bug in the rate limiter'. Should it be 'fix(ratelimit):'?", "should_trigger": false},
+  {"query": "is this design ready to ship? Wireframes attached in Figma — the new admin dashboard layout with the MudDrawer collapsed by default", "should_trigger": false},
+  {"query": "review this README — I rewrote the install steps because /plugin install didn't work on my other machine. Just want a docs-quality check.", "should_trigger": false},
+  {"query": "code review my Python script for the data export — it's a one-off ETL job, not in any repo, just on my desktop", "should_trigger": false},
+  {"query": "review the security incident postmortem I wrote — the structure is RCA / Impact / Detection / Remediation / Followup. Want feedback on whether each section is the right depth.", "should_trigger": false},
+  {"query": "look at this diff in the playground — I'm testing a new MudBlazor color scheme and want a design opinion, not a code-quality review", "should_trigger": false},
+  {"query": "review the GH Actions workflow I added — .github/workflows/playwright-test.yml. Want a CI review, not a code review.", "should_trigger": false}
+]
