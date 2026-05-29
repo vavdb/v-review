@@ -1,7 +1,7 @@
 {
   "name": "v-review",
-  "version": "0.4.2",
-  "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks an 18-item hunt list (silent failures, unjustified additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.), runs security and language-specific reviewers in parallel where available, stages fixes, refuses to commit eagerly. Suggests (does not auto-install) companion skills and subagents — see README for the recommended list.",
+  "version": "0.7.0",
+  "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks an 18-item hunt list (silent failures, unjustified additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.), runs security and language-specific reviewers in parallel where available, stages fixes, refuses to commit eagerly. Bundles five subagents — `csharp-reviewer`, `database-reviewer` (in-code data access), `database-schema-reviewer` (schema design), `playwright-test-reviewer` (E2E test discipline), `security-reviewer` (mandatory security pass with cascade analysis); suggests (does not auto-install) other companion skills and subagents — see README for the recommended list.",
   "author": {
     "name": "vavdb",
     "url": "https://github.com/vavdb"
@@ -21,23 +21,30 @@
   ],
   "recommendedCompanions": {
     "skills": [
-      "claude-mem:mem-search",
       "superpowers:systematic-debugging",
       "superpowers-lab:finding-duplicate-functions",
       "differential-review:differential-review",
       "insecure-defaults:insecure-defaults",
       "static-analysis:semgrep",
       "static-analysis:codeql",
+      "microsoft-docs:microsoft-docs",
       "caveman:caveman-review"
+    ],
+    "skillFamilies": [
+      {
+        "purpose": "cross-session-memory-search",
+        "examples": ["claude-mem:mem-search", "superpowers-marketplace:episodic-memory"],
+        "fallback": "Read ~/.claude/projects/<key>/memory/MEMORY.md directly. Specific tool is user preference; the act of searching memory is the rule."
+      }
+    ],
+    "mcpServers": [
+      "mcp__mudblazor__*"
     ],
     "subagents": [
       "code-reviewer",
-      "security-reviewer",
-      "database-reviewer",
-      "csharp-reviewer",
       "typescript-reviewer",
       "python-reviewer"
     ],
-    "note": "Not auto-installed. v-review probes availability at pre-flight and degrades gracefully when missing. See README for install hints."
+    "note": "Not auto-installed. v-review probes availability at pre-flight and degrades gracefully when missing. Five subagents are BUNDLED with v-review and auto-available when the plugin is installed: `csharp-reviewer` (agents/csharp-reviewer.md), `database-reviewer` (agents/database-reviewer.md — in-code data access), `database-schema-reviewer` (agents/database-schema-reviewer.md — schema design), `playwright-test-reviewer` (agents/playwright-test-reviewer.md — E2E test discipline), `security-reviewer` (agents/security-reviewer.md — mandatory security pass with cascade analysis). See README for install hints on the rest."
   }
 }

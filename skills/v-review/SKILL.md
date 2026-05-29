@@ -73,23 +73,32 @@ The skill names companions below that aren't bundled — they may or may not be 
 
 | Skill | When |
 |---|---|
-| `claude-mem:mem-search` | **First.** Was this work attempted before? Prior decisions, abandoned approaches, known landmines? Search before forming opinions. |
+| Cross-session memory search — whatever tool the user has installed (`claude-mem:mem-search`, `superpowers-marketplace:episodic-memory`, a custom memory plugin, or fall back to reading `~/.claude/projects/<key>/memory/MEMORY.md` directly) | **First.** Was this work attempted before? Prior decisions, abandoned approaches, known landmines? Search before forming opinions. The specific tool is the user's choice; the *act* of searching memory before reading the diff is the rule. |
 | `superpowers:systematic-debugging` | If the diff is a fix — was the root cause actually identified, or was a symptom patched? |
 | `differential-review:differential-review` | Non-trivial diff. Security-focused review with blast-radius scoring, git-history context, test-coverage check. |
 | `superpowers-lab:finding-duplicate-functions` | New helpers/services/domain logic added. Catches functions that do the same thing under different names — *exactly* the "re-implementation instead of reuse" case. Especially important for LLM-generated code. |
 | `insecure-defaults:insecure-defaults` | Diff touches config, env vars, secrets, auth setup, service registration. Catches fail-open patterns. |
 | `static-analysis:semgrep` | Multi-language diffs or pre-protected-branch merges. |
 | `static-analysis:codeql` | Deeper interprocedural taint/dataflow on security-sensitive code (auth, payments, user-input handling). |
+| `microsoft-docs:microsoft-docs` | When a finding hinges on a .NET / Azure / ASP.NET Core / EF Core API claim (signature, deprecation, language-version availability, configuration option), verify against official docs before flagging. Prevents hallucinated-API false positives. Especially relevant on C#/.NET diffs and migration reviews. |
+| `mcp__mudblazor__*` (MudMCP) | When a finding hinges on a MudBlazor component parameter, event, or enum value, verify against the live MudBlazor index. Use `get_component_parameters` / `get_component_detail` / `get_enum_values` before flagging a parameter name as wrong or missing. |
 
 ### Subagents to dispatch in parallel (if installed)
 
 These `subagent_type` names are **common in the third-party-plugin ecosystem (superpowers, Cursor, marketplace plugins, per-repo `.claude/agents/` files) but are NOT bundled with anything by default.** Run the availability check above before assuming any of them exist. If absent in this session: fall back to the `Explore` or `general-purpose` subagent with an explicit prompt that pins down what you want it to check (or invoke the closest skill-tool equivalent — `differential-review:differential-review` substitutes for `code-reviewer`/`security-reviewer` in most cases).
 
 - **`code-reviewer`** — general code quality, an independent second opinion after your own pass. (Skill substitute: `differential-review:differential-review`.)
-- **`security-reviewer`** — OWASP, injection, hardcoded secrets, auth bypasses. **Mandatory pass** when the diff touches anything security-sensitive (see hunt-list #16) — if the subagent is absent, the pass must happen via a Skill invocation or via Explore with a security-focused prompt.
-- **Language-specific reviewer** — `csharp-reviewer`, `typescript-reviewer`, `python-reviewer`, etc. Match the diff's primary language.
-- **`database-reviewer`** — migrations, schema mods, query changes.
+- **`security-reviewer`** (bundled) — OWASP, injection, hardcoded secrets, auth bypasses, plus cascade analysis on parallel-instance auth config drift. **Mandatory pass** when the diff touches anything security-sensitive (hunt-list #16). Walks the full §16 checklist; dispatches semgrep / codeql / insecure-defaults in parallel where available rather than duplicating pattern matching. Bundled so the mandatory path never degrades.
+- **Language-specific reviewer** — `csharp-reviewer` (bundled), `typescript-reviewer`, `python-reviewer`, etc. Match the diff's primary language.
+- **`database-reviewer`** (bundled) — **in-code data access**: EF Core query patterns, Dapper, raw SQL, transactions, connection management, N+1. Fires on service/repository/handler files touching `DbContext` / `IDbConnection` / `FromSqlRaw` / `ExecuteSql*`.
+- **`database-schema-reviewer`** (bundled) — **schema design**: field types, indexes (FK strict, others advisory), constraints, normalization, migration safety, multi-tenant gating. Fires on `Migrations/*.cs`, `*Configuration.cs`, `*ModelSnapshot.cs`, `OnModelCreating` body, new `DbSet<T>`, `.sql` DDL.
+- **`playwright-test-reviewer`** (bundled) — **E2E test discipline** for Playwright suites driving Blazor Server + MudBlazor. Bans force clicks, retry loops, shotgun timeouts, silent catches, `networkidle`, bare `page.goto`; enforces semantic selectors, project fixture imports, after-action assertions, test/component `data-testid` consistency. Fires on `tests/**/*.spec.ts`, `*-fixtures.ts`, `playwright.config.ts`.
 - **`aws-reviewer`** / **`gcp-reviewer`** — CDK/CloudFormation/Terraform, IAM, deploy config.
+
+**Dispatch logic for the database + test reviewers**:
+- When the diff touches BOTH code-side data-access AND schema files (typical mixed feature PR), dispatch both `database-reviewer` and `database-schema-reviewer` in parallel. They cross-reference each other (e.g. "this N+1 fix depends on the FK index flagged in schema review").
+- When the diff includes BOTH `.razor` changes AND corresponding `.spec.ts` changes (new feature ships UI + tests together), dispatch `csharp-reviewer` and `playwright-test-reviewer` in parallel. They pair-flag `data-testid` mismatches (markup side vs test side).
+- `security-reviewer` runs in addition to the above whenever the diff touches anything security-sensitive — auth, input handling, DB, file uploads, external API, crypto, secrets.
 
 Launch in parallel (single message, multiple `Agent` calls) where possible.
 
