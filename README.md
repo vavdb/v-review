@@ -58,17 +58,29 @@ Claude reads the README's Recommended companions table and runs `/plugin install
 Plugins (one `/plugin install` per line, from inside Claude Code):
 
 ```
-/plugin install obra/superpowers                             # systematic-debugging, dispatching-parallel-agents
-/plugin install obra/superpowers-lab                         # finding-duplicate-functions
-/plugin install trailofbits/claude-plugins-official          # differential-review, insecure-defaults, static-analysis
-/plugin install anthropics/claude-plugins                    # microsoft-docs ← .NET / Azure / EF Core verification
+# anthropic marketplace (preinstalled with Claude Code)
+/plugin install microsoft-docs@claude-plugins-official       # .NET / Azure / EF Core API verification
 /plugin install pr-review-toolkit@claude-plugins-official    # silent-failure-hunter, comment-analyzer, pr-test-analyzer, type-design-analyzer
-/plugin install JuliusBrussee/caveman                         # caveman-review
+
+# trailofbits security skills  (repo: trailofbits/skills → marketplace name: trailofbits)
+/plugin marketplace add trailofbits/skills
+/plugin install differential-review@trailofbits              # blast-radius / git-history / coverage
+/plugin install insecure-defaults@trailofbits                # config / secrets / auth-setup diffs
+/plugin install static-analysis@trailofbits                  # bundles semgrep + codeql
+
+# superpowers  (repo: obra/superpowers-marketplace → marketplace name: superpowers-marketplace)
+/plugin marketplace add obra/superpowers-marketplace
+/plugin install superpowers@superpowers-marketplace          # systematic-debugging, dispatching-parallel-agents
+/plugin install superpowers-lab@superpowers-marketplace      # finding-duplicate-functions
+
+# caveman  (output compression for PR comments)
+/plugin marketplace add JuliusBrussee/caveman
+/plugin install caveman@caveman
 ```
 
 Cross-session memory tool — **pick your own**. v-review queries whatever's available. Examples: [claude-mem](https://github.com/thedotmack/claude-mem) (`/plugin install thedotmack/claude-mem`), `superpowers-marketplace:episodic-memory`, or just the built-in `~/.claude/projects/<key>/memory/` (no install). Maintainer uses `claude-mem`; no default forced here.
 
-(Exact plugin/marketplace names may vary as those projects evolve — verify the source URLs in the table before installing.)
+**Gotchas:** `static-analysis:semgrep` / `:codeql` ship in one plugin (`static-analysis@trailofbits`) — not separate, and not the unrelated `semgrep@claude-plugins-official`. `microsoft-docs` lives in the preinstalled `claude-plugins-official`, not a separate anthropics marketplace. Each third-party marketplace needs `/plugin marketplace add <repo>` before its plugins resolve.
 
 MCP servers (separate install path — not `/plugin install`). Skip if your stack doesn't use them:
 
