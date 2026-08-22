@@ -171,6 +171,28 @@ If `csharp-reviewer` is dispatching in parallel, this is the pair-finding catego
    Or, with the project's test runner if it differs. Must pass without retries. If a test fails on first run and passes on retry, the test is the bug.
 7. **Stage with `git add`. Do NOT commit.**
 
+## Excuse-making — claims that deflect a failure away from the code
+
+The highest-severity thing you can find in a test diff. A wrong test is a bug; an *explained-away* test is a bug plus a false all-clear, and the all-clear is what ships it.
+
+Check the PR body, commit messages, test annotations, code comments, and the session transcript if you have one, for:
+
+> "known flaky" · "flaky in CI, passes locally" · "network error, unrelated to my change" · "pre-existing failure" · "environment issue" · "CI is being weird" · "test infrastructure problem" · "intermittent, will fix in a follow-up" · "the test was wrong so I updated it" · "timing issue, added a wait" · "works on my machine"
+
+Every one is a hypothesis, and every one is cheap to falsify. Falsify it:
+
+- **"Pre-existing"** → `git checkout <base>` and run that exact spec: `npx playwright test tests/<file>.spec.ts -g "<title>"`. If it passes on the base ref, the claim is false and this diff broke it. One command, question settled.
+- **"Known flaky"** → `npx playwright test <spec> --repeat-each=20 --workers=1`, then again without `--workers=1`. Reproduces under parallelism only? Shared state — a fixed entity id two specs both mutate, a shared login, a database row not scoped per worker. Reproduces serially? A real race in the app or a missing auto-wait. **Flakiness that reproduces is not flakiness; it is a bug with a bad name.**
+- **"Network error"** → find the request. A spec hitting a live third-party endpoint is the finding regardless of today's result; route-mock it (`page.route`) or point it at the project fixture.
+- **"Unrelated to my change"** → grep the failing spec's subject against everything the diff touches, including shared fixtures, `playwright.config.ts`, and any component the page renders transitively. "Unrelated" is a conclusion, not a starting assumption.
+- **"I updated the test to match"** → which changed first, the behaviour or the assertion? Read what the old assertion protected. A red bar turned green by editing the expectation is a regression with a passing suite over it.
+
+**Silencing moves that travel with the excuse** — check for these in the same diff: `test.skip` / `test.fixme` / `test.fail` without an issue link *and* a diagnosis; `retries` raised globally or per-project; `test.setTimeout()` bumped on the failing spec only; `expect(...).toBeVisible()` softened to `toBeAttached()`, an exact `toHaveText` loosened to `toContainText`, an exact count replaced with `toBeGreaterThan(0)`; a spec moved out of the default project into a manually-triggered one; `continue-on-error: true` on the CI test step.
+
+**Severity: HIGH** when a spec was skipped, retried, or had an assertion weakened *in the same diff* that changed the behaviour it covered. Behaviour changed + test silenced + labelled a flake is exactly how a regression ships with a green pipeline.
+
+Full playbook (language-agnostic): `skills/v-review/references/test-integrity.md`.
+
 ## Output format
 
 ```
@@ -200,7 +222,7 @@ If `csharp-reviewer` is dispatching in parallel, this is the pair-finding catego
 
 **Severity emoji**: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🔵 LOW.
 
-**`Pattern` column uses plain-English labels**: `banned wait`, `force action`, `silent catch`, `retry loop`, `fixture drift`, `selector`, `missing assertion`, `flake masquerade`, `disabled test`, `test data`, `config drift`, `screenshot drift`, `consistency mismatch`. Never `Hunt #N`.
+**`Pattern` column uses plain-English labels**: `banned wait`, `force action`, `silent catch`, `retry loop`, `excused failure`, `worthless test`, `fixture drift`, `selector`, `missing assertion`, `flake masquerade`, `disabled test`, `test data`, `config drift`, `screenshot drift`, `consistency mismatch`. Never `Hunt #N`.
 
 **Imperative verbs**: `Replace`, `Remove`, `Re-import`, `Scope`, `Wait for`, `Add assertion`, `Annotate`, `Fix root cause`, `Reject`.
 

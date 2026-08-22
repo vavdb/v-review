@@ -10,9 +10,45 @@ Activated when you ask Claude to **review a branch, PR, commit, or staged diff**
 
 1. Reads the project's `CLAUDE.md`, `AGENTS.md`, and any `.claude/rules/` files so project conventions override anything in the skill.
 2. Dispatches the right specialist subagents in parallel — `security-reviewer` when auth is touched, `code-reviewer` as an independent second opinion, language-specific reviewers (`csharp-reviewer`, `typescript-reviewer`, etc.), `database-reviewer` for migrations, and chains `differential-review`, `finding-duplicate-functions`, `insecure-defaults`, `semgrep`, `codeql` where the diff signals warrant it.
-3. Walks an 18-item hunt list — silent catches, unjustified additions, boolean-flag API smells, redundant DI registrations, parallel-instance configuration drift, duplicated/re-invented helpers, semantic duplicate functions, framework-primitive re-implementations, domain-language drift, dead code, test smells (force-clicks, retry loops, swallowed assertions, tests that assert LINQ exists), missing `sealed`, mis-named `Try*` methods, hand-edited generated artifacts (migrations, lockfiles), useless imports, the full security checklist, leftover artifacts, and architecture-doc/code contradictions.
+3. Walks a 26-item hunt list — silent catches, unjustified additions, boolean-flag API smells, redundant DI registrations, parallel-instance configuration drift, duplicated/re-invented helpers, semantic duplicate functions, **near-duplicate clones** (the 80%-identical function that differs by one param or one null check), framework-primitive re-implementations, domain-language drift, dead code, missing `sealed`, mis-named `Try*` methods, hand-edited generated artifacts (migrations, lockfiles), useless imports, the full security checklist, leftover artifacts, architecture-doc/code contradictions, **over-terseness**, **string literals where a constant already exists** (`"nl"` instead of `CultureInfo`, a policy name typed twice), **change-narration** (comments and PR bodies that say what changed instead of what the thing does), **requirement fidelity** (did the diff implement the ticket, or a plausible adjacent problem?), **quality-gate weakening** (`continue-on-error`, `|| true`, suppressed analyzers, lowered coverage), **dependency provenance** (hallucinated and slopsquatted packages), and **test integrity** — tests that assert nothing but that LINQ exists or that 2+2=4, failure paths never exercised, and failures explained away as "known flaky" or "unrelated to my change".
 4. Applies mechanical fixes, runs build + targeted tests, then **stages the result with `git add` and stops**. The author reviews staged diffs before they land — committing eagerly turns review into post-mortem.
 5. Returns a `Was → Now` table per finding, severity tags (CRITICAL/HIGH/MEDIUM/LOW), unfixed-but-flagged issues, considered-but-deliberately-left calls with one-sentence reasoning, the skills + subagents invoked with headline outputs, and the exact build + test commands run with pass/fail.
+
+### Bundled preflight scripts
+
+v-review ships six scripts it runs itself; they also work standalone:
+
+| Script | Purpose |
+|---|---|
+| `scripts/scope.sh <base-ref>` | Branch name, file stats, changed-file list |
+| `scripts/repo-survey.sh [since] [top-n]` | **Audit mode.** The reading plan for a whole-repo pass: file/line denominators for the coverage statement, churn ranking, size ranking, the risk × churn **hotspot intersection**, always-read security surface, dead zones, debt-marker counts, test distribution |
+| `scripts/conflict-marker-scan.sh <base-ref>` | Hard precondition — refuses to review a diff containing unresolved conflict markers |
+| `scripts/dup-scan.sh <base-ref> [--no-jscpd]` | **C# only.** Near-duplicate candidates: verb-synonym grep (`VerifyCompanyOwner` vs existing `IsCompanyOwner`), signature-shape collisions, and a jscpd token-clone pass of the changed files against the **whole repo** |
+| `scripts/package-scan.sh <base-ref> [--offline]` | **NuGet.** Every added `<PackageReference>` checked against nuget.org: does it exist (a missing package is the hallucinated-package shape), is the id a near-twin of something far more popular (slopsquat), owner and download count, is the pinned version actually published, and is it pinned at all. Offline it still catches wildcards, ranges, and Central Package Management overrides |
+| `scripts/literal-scan.sh <base-ref>` | **C# only.** String literals that already have a home: BCL constants (`CultureInfo`, `MediaTypeNames`, `HeaderNames`, `JwtBearerDefaults`…), values this repo already names as `const`/`static readonly`/enum member, `nameof` positions, and authorization policy/role drift |
+
+`dup-scan.sh` and `literal-scan.sh` are scoped to C#/.NET source — `.cs`, `.csx`, `.razor`, `.cshtml`, `.aspx`, `.ascx`, `.asax`, `.ashx`, `.asmx`, `.master`, `.xaml`, `.axaml` — with generated output (`.Designer.cs`, `.g.cs`, `*ModelSnapshot.cs`, `obj/`, `bin/`) excluded on both the diff side and the search side. The markup dialects are in scope deliberately: a magic string in a `.razor` is the same finding as one in a `.cs`. On a diff with no C# in it they exit cleanly with a message, and hunts #19 and #21 get walked by hand.
+
+`package-scan.sh` needs network for the nuget.org lookups; `--offline` degrades it to the pinning checks. Note that a successful `dotnet restore` is **not** evidence a package is legitimate — a slopsquatted package restores perfectly; that is its entire purpose.
+
+The three scanners also take `--repo` (or any tree-ish) instead of a base ref, which diffs against the empty tree so every tracked line counts as new — that is whole-repo audit mode. `literal-scan.sh --repo` caps its report at 40 literals and says so explicitly; a truncated scan reported as complete is the failure this skill exists to prevent.
+
+All three print **candidate** lists, not findings — every hit still needs both sides read before it lands in a review. Neither is a gate: a non-zero exit means the scan couldn't run, not that the diff failed. `dup-scan.sh`'s third pass needs `npx`; pass `--no-jscpd` to skip it.
+
+### Whole-repo audit mode
+
+Point it at a codebase instead of a diff — "audit this repo", "where's the tech debt", "survey before we refactor", "I'm onboarding, what's here". Same 26 hunts, different output: aggregated **themes** (count, three exemplars, blast radius, fix order) rather than per-instance findings, only CRITICAL/HIGH listed individually, and a mandatory coverage statement saying how many files were read end-to-end, how many were scanned mechanically, how many were never opened, and what the sampling method was.
+
+Three of the skill's rules invert in this mode — "pre-existing code is out of scope" chief among them, since pre-existing code is the entire subject — and it **does not apply fixes**, because a repo-wide mechanical fix is a 10,000-line diff nobody can review. It produces a prioritised plan plus one exemplar fix per theme.
+
+```
+scripts/repo-survey.sh 1.year 40     # reading plan: hotspots = risk × churn
+scripts/dup-scan.sh --repo           # clone clusters across the whole codebase
+scripts/literal-scan.sh --repo       # every magic literal, capped and announced
+scripts/package-scan.sh --repo       # every dependency, provenance-checked
+```
+
+The audit ends with a **ratchet, not a cleanup list**: baseline the theme counts, hold new code to the bar, burn debt down one theme at a time. An audit that says "you have 400 problems" gets filed; a prioritised three gets done.
 
 The skill is **opinionated**. It refuses additions with no stated reason, calls out UI-only authorization, flags any migration that moves data without backfill as a data-loss event, and rewrites domain-language drift (e.g. "tenant" terminology in single-instance codebases) without ceremony. If you can't defend a line in one sentence, it goes.
 

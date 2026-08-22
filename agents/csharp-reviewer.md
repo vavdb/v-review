@@ -49,7 +49,7 @@ For each of these, the rule is: *recommend only when the diff would visibly impr
 - **`static` on every method that doesn't read `this`.**
 - **`CancellationToken` parameter on every `Task`-returning method** that does I/O, with the token plumbed through (not accepted and dropped).
 - **Composition over inheritance.** Sealed concrete types + injected collaborators beats a class hierarchy.
-- **Modern C# (12+) where it sharpens the code**: primary constructors for DI-only types, collection expressions, pattern matching over `if`/`else` chains for discriminated cases, record types for DTOs and value objects, `required` members, file-scoped namespaces.
+- **Modern C# where it sharpens the code — gated on what the project can compile.** Primary constructors for DI-only types, collection expressions, pattern matching over `if`/`else` chains for discriminated cases, record types for DTOs and value objects, `required` members, file-scoped namespaces (all C# 11–12, safe to assume). Beyond that, **check `<LangVersion>` / `<TargetFramework>` before recommending anything**: `field` and extension members are C# 14 / `net10.0`; `params` collections are C# 13; `System.Threading.Lock`, `Guid.CreateVersion7()`, and `.GetAlternateLookup` are .NET 9. Recommending syntax the project cannot compile is a false positive that costs you credibility for every finding after it. Version-gated tables: `skills/v-review/references/modern-csharp.md`.
 - **Nullable reference types enabled**, and properly annotated. A `?` chain that nests three deep usually wants a `switch` or early-return refactor.
 
 ## Project context to load FIRST
@@ -60,7 +60,7 @@ Before reading the diff, load (in order):
 2. **`AGENTS.md`** / **`GEMINI.md`** if present.
 3. **`.claude/rules/common/*.md`** — code-review, security, silent-failure scan, patterns, testing.
 4. **`.claude/rules/csharp/*.md`** — stack-specific anti-patterns, coding-style, testing, security.
-5. **`Directory.Packages.props`** / **`Directory.Build.props`** / **`global.json`** — pinned .NET version, central package management state, language version.
+5. **`Directory.Packages.props`** / **`Directory.Build.props`** / **`global.json`** / the `.csproj` files in the diff's path — pinned .NET version, central package management state, and specifically `<TargetFramework>`, `<LangVersion>`, `<Nullable>`, `<TreatWarningsAsErrors>`, `<AnalysisLevel>`. **This is a hard gate on the whole "modern C#" finding class** — read it before you flag anything as "should use the newer form", and note what you found so the dispatcher can see the constraint you reviewed under.
 6. **`docs/agents/ef-migrations.md`** (or equivalent) if the diff touches migrations.
 7. **Memory references** — `~/.claude/projects/<key>/memory/MEMORY.md` for active-work context and intentional removals. A thing the diff "deletes" may be deliberate, not a bug.
 
@@ -293,14 +293,143 @@ These apply when the diff *creates or modifies* a wrapper component over MudBlaz
 - **Health checks added inline** when the project uses Aspire's defaults extension. Defaults already wire liveness/readiness/standard tags.
 - **OTel configuration** added in a consumer project that the AppHost already configures via `AddServiceDefaults()` — duplicated otel pipelines.
 
+### 19. Near-duplicates (the "almost the same" clone)
+
+§6 catches textbook duplicates, §7 catches semantic ones. This catches the one that slips past both: a new method 80% identical to an existing one, differing by **one extra parameter, one extra null check, or one different constant**. jscpd / CPD / dupfinder find type-1 and type-2 clones (exact, renamed). They do not find these.
+
+Run the dispatcher's bundled scan and read the candidates:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/dup-scan.sh <base-ref>
+```
+
+Verb-synonym pass (`VerifyCompanyOwner` vs existing `IsCompanyOwner`), signature-shape pass (same return type + parameter-type sequence), and a jscpd pass of the changed files against the **whole repo** — not just within the diff.
+
+C#-specific near-duplicate shapes:
+
+- **A new DTO / record whose property set is a subset or superset of an existing one.** Especially `*Request` / `*Response` / `*Dto` / `*ViewModel` families — these breed.
+- **A second extension-method class over a type that already has one.** `StringExtensions` and `StringHelpers` in the same assembly is always a finding.
+- **A second `*Service` / `*Provider` / `*Repository` doing what an existing one does with a different scope predicate** — this is §6's cross-layer authority rule seen from the duplication side, and the *narrower* predicate is almost always the bug.
+- **Near-identical migrations** — same operation on a different table, one of them missing the index or `IsRequired`.
+- **Near-identical `*Configuration.cs` entity configs**, diverging on delete behaviour or max length for no stated reason.
+- **Near-identical test fixtures / builders**, diverging on setup defaults.
+
+**The rule:** ≥70% structural similarity needs a stated reason both must exist, and the reason belongs in the PR description. "The existing one didn't quite fit" means extend the existing one, not fork it. Confirm each scan hit by reading both sides — the scan output is candidates, not findings.
+
+### 20. Over-terseness — logic crammed where it should breathe
+
+The mirror image of §"unjustified additions". Agent-written C# tends to cram, not pad — more logic per block, fewer named intermediates. Flag:
+
+- **LINQ chains** with more than ~3 lambda-bearing operators in one expression, or lambdas nested inside `Select`. Especially inside an EF query, where an unreadable chain is also an untranslatable one — and the failure mode is a silent client-side evaluation.
+- **Nested ternaries**, and ternaries inside interpolated strings.
+- **Abbreviated identifiers** outside single-line lambdas: `res`, `tmp`, `cfg`, `mgr`, `svc`, `req`, `ctx`.
+- **Unnamed compound predicates** — `if (a && (b || c) && !d)`. Extract a named `bool`; the name is the documentation the condition needs. On an authorization predicate this is HIGH, not MEDIUM — nobody can verify what nobody can read.
+- **Demeter trains** — `a.B().C.D().E` crossing three abstraction layers in one expression.
+- **Positional tuple returns** — `(bool, string, int)` where a `record` belongs. Positional tuples push the burden of remembering the order onto every call site forever.
+- **Expression-bodied members doing two things.** `=>` claims the member is one expression's worth of work.
+- **`var x = Foo();`** where the type isn't recoverable from the right-hand side.
+- **Inverse terseness — what got dropped for compactness.** Diff the new method against its siblings: a missing guard clause, a `CancellationToken` the sibling threads and this one doesn't, logging the sibling emits and this one skips, a `ConfigureAwait` the file otherwise applies consistently. Absence is harder to see than presence, which is why it survives review.
+
+### 21. String literals where a constant already exists
+
+For every string literal the diff adds: does the BCL name it, does this repo name it, or is it typed in more than one place?
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/literal-scan.sh <base-ref>
+```
+
+- **BCL-named standards.** `"nl"` → `CultureInfo` / `.TwoLetterISOLanguageName` (ISO 639-1; note a bare two-letter code is a *language*, not a culture — conflating them is the real bug). `"NL"` → `RegionInfo.TwoLetterISORegionName`. `"EUR"` → `ISOCurrencySymbol`. `"application/json"` → `MediaTypeNames`. `"Authorization"` → `HeaderNames`. `"GET"` → `HttpMethods`. `"Bearer"` → `JwtBearerDefaults.AuthenticationScheme`. `"sub"` / `"role"` → `ClaimTypes` / `JwtRegisteredClaimNames` (which of the two depends on `MapInboundClaims` — see §5). `200` → `StatusCodes.Status200OK`. `"utf-8"` → `Encoding.UTF8`. A hardcoded timezone id → `TimeZoneInfo.FindSystemTimeZoneById`, which accepts **both** Windows and IANA ids since .NET 6; pinning one form is a portability bug that only surfaces on the other OS.
+- **Repo-named values.** `status == "Active"` where a `Status` enum exists. A new string property with 3–5 known values *is* an enum. `Enum.Parse` on external input → `Enum.TryParse(..., ignoreCase: true, out _)` — and note `TryParse` succeeding does **not** mean the value is defined; `Enum.IsDefined` is that check, and it's the one people skip.
+- **`nameof` positions.** `ArgumentNullException("id")` (or better, `ArgumentNullException.ThrowIfNull`, which supplies the name via `CallerArgumentExpression`), EF `.Property("X")` / `.Include("Nav")` / `.HasIndex("Col")`, `OnPropertyChanged("X")` (or `[CallerMemberName]`), `[Display(Name = …)]` where the value is a member name.
+- **Project drift pairs — HIGH minimum.** `[Authorize(Policy = "Admin")]` vs `AddPolicy("Administrator", …)` compiles, deploys, and fails closed for everyone (or open, with the check inverted). Named `HttpClient` registrations have the same shape: `AddHttpClient("api")` vs `CreateClient("apiClient")` silently yields a default client with **none** of the configured handlers, retries, or base address. Also: config keys, cache keys, feature-flag names, queue/topic names, and `data-testid` values shared between a `.razor` component and its `.spec.ts`.
+
+**Counter-rule:** a literal used once, in one place, with no BCL equivalent and no repo constant, is fine. Do not manufacture a `Constants` class for a single call site.
+
+Full tables: `skills/v-review/references/literals-and-constants.md`.
+
+### 22. Analyzer suppression — silencing instead of fixing
+
+The top tell that a diff was made to compile rather than to work. Grep every diff:
+
+```bash
+git diff <base>...HEAD | grep -nE '^\+.*(#pragma warning disable|SuppressMessage|<NoWarn>|dotnet_diagnostic\..*severity *= *none|TreatWarningsAsErrors>false)'
+```
+
+- `#pragma warning disable` with no same-line justification naming *why the warning is wrong here* → finding.
+- `[SuppressMessage]` with `Justification = "<Pending>"` → finding. That's the IDE placeholder; nobody came back.
+- `.editorconfig` severity downgraded (`warning` → `suggestion` / `none`) inside a feature diff → finding. Rule changes belong in their own commit with a stated reason, not smuggled in alongside a feature.
+- `<NoWarn>` entries added to a `.csproj` → finding.
+- `<TreatWarningsAsErrors>` removed or set `false` → **HIGH**. A project-wide gate disabled to land one diff.
+- `<Nullable>` downgraded from `enable` → **HIGH**.
+- **`!` (null-forgiving) added where the nullability isn't proven by a preceding check** → finding. `!` is an assertion; an unproven assertion is a `NullReferenceException` with extra steps. A `?.` chain nesting three deep next to a `!` is the pair to look for.
+
+### 23. Change-narration where a description belongs
+
+Prose that says what changed instead of what the thing does. Reads fine the day it lands — the reviewer still has the before-state in their head — and is unreadable to everyone after that.
+
+- **Comments**: `// now uses the cached provider`, `// switched to`, `// replaced the old`, `// no longer`. Rewrite present-tense, or delete (see the comment defaults above and §"Comments and documentation").
+- **PR / commit body**: a list of edits ("added X, refactored Y") tells a future reader nothing `git diff` doesn't. What the diff *can't* say is why the change exists, what problem it solves, and what was decided against. It's also the only intent signal an external reviewer gets. When the justification a finding demands (§3's "defend it in one sentence", §19's "why do both exist") lives nowhere, the PR body is where it belongs.
+- **Added docs** that describe a migration *from* something rather than the state of the thing now — same failure, same fix.
+
+### 24. Platform currency (check the TFM first — every item here is version-gated)
+
+Read `<TargetFramework>` before flagging any of these. Full tables: `skills/v-review/references/modern-csharp.md`.
+
+- **Minimal API validation.** On `net10.0`, `AddValidation()` validates request bodies, query strings, route values, and headers using DataAnnotations natively. A diff that adds FluentValidation / MiniValidation / a hand-rolled validator for ordinary `[Required]` / `[Range]` / `[EmailAddress]` shapes is a framework re-implementation (§8). **Not** a finding when the project already standardises on FluentValidation — consistency beats novelty, and a second validation model is worse than one slightly dated model.
+- **OpenAPI 3.1 is the .NET 10 default**, with JSON Schema 2020-12. Nullable types emit a `type` array containing `"null"` instead of `nullable: true`. If the diff bumps the TFM and the repo has generated clients, contract tests, or a Swagger UI pinned to 3.0, that's a **contract-drift finding**, not a footnote.
+- **TFM-upgrade breaking changes.** When the diff moves `<TargetFramework>` to `net10.0`, walk three specifically: (1) **span overload resolution** — new span conversions and inference rules can bind a call site to a different overload than C# 13 did, or make it ambiguous; confirm the binding on any `Span<T>` / `ReadOnlySpan<T>` / array / `string` overload set the diff touches. (2) **attribute target validation is now enforced** — previously-ignored attributes now error, which means each one was never doing anything. (3) **`scoped` is always a lambda parameter modifier** — code using it as a type name there stops compiling.
+- **Do not turn this section into a drive-by modernisation PR.** Flagging a legacy shape in *new* code is in scope. Rewriting untouched files to the newer form is not — see "Out of scope".
+
+### 25. .NET correctness patterns agents get wrong
+
+Not style. Each of these is a bug, an allocation problem, or a silent behaviour change — and each is common in generated C#.
+
+- **Interpolated-string logging.** `_logger.LogInformation($"Order {id} failed for {user}")` destroys the message template: every call becomes a unique string, structured-log queries on `OrderId` stop working, and the arguments are formatted even when the level is disabled. Violates **CA2254**. Use `_logger.LogInformation("Order {OrderId} failed for {User}", id, user)`. **This is probably the single most common agent output in .NET — check every `Log*` call in the diff.**
+- **`StringComparison` omitted.** `a.ToLower() == b.ToLower()` allocates two strings and applies culture rules (Turkish-I is the classic breakage). `Equals`, `StartsWith`, `EndsWith`, `Contains`, `IndexOf` on strings should carry an explicit `StringComparison` — `Ordinal` / `OrdinalIgnoreCase` for identifiers, keys, and protocol values; culture-aware only for user-facing sorting. CA1310 / CA1862 / CA1305.
+- **`ValueTask` misuse.** `ValueTask` may be awaited **once**, must not be cached, must not be `.Result`-ed, and must not be consumed concurrently — all of these are undefined behaviour, not slow paths. Also flag reaching for it *at all* without a profiled allocation problem: `Task` is the default, `ValueTask` is the optimisation.
+- **Sync-over-async** — `.Result`, `.Wait()`, `.GetAwaiter().GetResult()` in request paths. Deadlock risk plus thread-pool starvation.
+- **`new HttpClient()` per call** — socket exhaustion via `TIME_WAIT` accumulation; the DI-registered typed/named client exists for this. (§4 covers the registration; this covers the raw construction.)
+- **`JsonSerializerOptions` constructed per call.** It's expensive to build and internally caches after first use — a fresh instance per serialize kills that cache. Make it a `static readonly` singleton. It's also the §5a drift problem: two hand-built options objects diverge silently.
+- **`new Regex(...)` in a method body**, and — on user-supplied input — **any regex without a `matchTimeout`**. Unbounded backtracking on attacker-controlled input is ReDoS; `[GeneratedRegex]` or a static readonly instance with an explicit timeout.
+- **`new Random()` per call** — seeded from a clock with limited resolution, so tight loops produce identical sequences. `Random.Shared`. For anything security-adjacent, `RandomNumberGenerator` (see security-reviewer §13).
+- **`DateTime.Now` where `UtcNow` belongs** — anything persisted, compared across machines, or used in an expiry check. Distinct from the `TimeProvider` convention question above: this one is a correctness bug, not a style preference.
+- **String concatenation in a loop** → `StringBuilder`. Only worth flagging when the loop is unbounded or the path is hot; a three-iteration concat is fine.
+- **`ArrayPool<T>.Rent` without a matching `Return` in a `finally`** — a leak that looks like a GC problem. `clearArray: true` when the buffer held anything sensitive.
+- **`async void`** outside event handlers — the exception cannot be caught by the caller and crashes the process. Already in §2; re-check it here on every new method.
+- **`dynamic` used to get past a compile error** — pushes the failure to runtime and disables every analyzer downstream of it.
+
+### 26. Test integrity (C# lens)
+
+Full playbook: `skills/v-review/references/test-integrity.md`. The C#-specific shapes:
+
+- **Tests of the language, not the code.** `Arrange` builds a `List<T>`, `Act` calls `.Where(...)`, `Assert` checks `.Count` — that tests LINQ. Same for asserting a `record`'s properties round-trip (tests the compiler's generated ctor), `JsonSerializer` round-trips with default options and no custom converter (tests `System.Text.Json`), `DateTime` arithmetic (tests the BCL), an enum's `ToString()` equalling its member name.
+- **Maths with no rule behind it.** `Assert.Equal(4, 2 + 2)`, `Assert.Equal(21m, 100m * 0.21m)`. The test that separates real from worthless: **which domain rule breaks if this assertion fails?** `Assert.Equal(21m, CalculateVat(100m))` encodes the VAT rate. The literal multiplication encodes nothing and keeps passing after the rate changes to 19%.
+- **The mutation check.** For every test in the diff, mentally break the production code. If the test still passes, it tests nothing. Five seconds, highest yield in test review.
+- **Asserting the mock you just configured** — `mock.Verify(m => m.SaveAsync(It.IsAny<Order>()))` where `SaveAsync` is the only call in the method under test and the setup accepts anything. That asserts you wrote the line you just wrote.
+- **Asserting the fixture you just seeded** — `Assert.Equal(3, _context.Orders.Count())` against three rows the test inserted.
+- **Failure paths.** Check for tests covering: malformed input, empty/null/whitespace, boundaries, **permission denied** (if §15 says the service gates, a test must prove it gates), not-found vs forbidden, downstream failure, an already-cancelled `CancellationToken` where one is accepted. A new `catch` block with no test for the caught path has tested the part that already worked.
+- **Excuse-making — the highest-severity item here.** `[Fact(Skip = "flaky")]`, a `Retry` attribute, a raised timeout on one test, a loosened assertion (`Assert.Equal` → `Assert.Contains`, an exact count → `Assert.True(x > 0)`), or a PR body saying "known flaky" / "pre-existing" / "network error, unrelated" / "environment issue". **Falsify each one**: `git checkout <base> && dotnet test --filter "FullyQualifiedName~<Test>"` settles "pre-existing" in one command; a 20-iteration loop settles "flaky" — and flakiness that reproduces is shared state, `[Collection]` misconfiguration, test ordering, a real race, or a clock/timezone assumption. **HIGH** when a test was silenced in the same diff that changed the behaviour it covered.
+
+### 27. Dependency provenance
+
+Full detail: `skills/v-review/references/dependency-provenance.md`. Run `${CLAUDE_PLUGIN_ROOT}/scripts/package-scan.sh <base-ref>`.
+
+- **A new `<PackageReference>` for a package that doesn't exist on nuget.org is CRITICAL** — unless the PR names the private feed that supplies it. `dotnet restore` succeeding is not evidence: a slopsquatted package restores perfectly.
+- **Near-identical ids.** `Newtonsofte.Json`, `Serilogg`, `Microsoft.Extensions.Loging`. One character, total compromise. Weight the id similarity against the download gap.
+- **Reserved-prefix claims without a verified marker** — a package shaped like `Microsoft.*` or `System.*` that isn't.
+- **Unpinned versions** — `Version="*"`, `6.*`, or a range `[6.0,7.0)`. A future publish lands in the app with no diff. Under Central Package Management, a `Version=` on the `PackageReference` silently overrides the central pin for that project only.
+- **`dotnet list package --vulnerable --include-transitive`** and `--deprecated` on any diff that adds or bumps a reference. The transitive flag is the one that matters.
+- **Then** ask hunt #3's question: is the dependency justified at all, or does it duplicate something already in the tree?
+
 ## Process
 
 1. **Load project context** (see "Project context to load FIRST"). Read every relevant file end-to-end.
 2. **Walk the diff file-by-file**, full files not just hunks. The diff hides the surrounding 1,000-line god component.
 3. **Run the hunt list.** For each finding: `file:line — problem — fix`. Tag severity per the project's review rule file. Group by file.
 4. **Procedural sweep** — sealing, readonly, internal, static, CancellationToken — explicitly, not from memory.
-5. **Build the affected project** if mechanical fixes were applied: `dotnet build <project>.csproj --nologo`. Resolve real errors. LSP staleness usually resolves with `dotnet restore --force-evaluate`.
+5. **Build the affected project** if mechanical fixes were applied: `dotnet build <project>.csproj --nologo`. Also run `dotnet format --verify-no-changes`, and when the diff adds or bumps a package reference, `dotnet list package --vulnerable --include-transitive` (the transitive flag is the one that matters — the CVE is rarely in the direct dependency). Resolve real errors. LSP staleness usually resolves with `dotnet restore --force-evaluate`.
 6. **Run targeted tests**: `dotnet test --filter "FullyQualifiedName~<TestClass>"`. Must be green. If you changed a behaviour test, the new test must actually exercise the new behaviour.
+6a. **Verify every finding before returning it.** Re-open each file at the line you cited and confirm the code says what your note claims; confirm any "existing helper" you told them to reuse exists at the path you gave; confirm any API you recommended exists in the *pinned* version (query `microsoft-docs` where available). **Drop what you cannot reproduce.** One confident false positive gets the whole finding set discounted — and a reviewer that hallucinates while hunting hallucinations has no standing.
 7. **Stage with `git add`. Do NOT commit.** The author reviews staged diffs before they land.
 
 ## Output format
@@ -328,7 +457,7 @@ Return findings to the v-review dispatcher in this shape so v-review can fold th
 
 **Severity emoji**: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🔵 LOW.
 
-**`Pattern` column uses plain-English labels**: `silent failure`, `framework drift`, `cascading drift`, `unsafe migration`, `UI-only authz`, `duplicated helper`, `redundant code`, `unjustified addition`, `dead code`, `missing tests`, `code sweep`, `sibling mismatch`, `hand-edited generated file`, `leftover artifact`, `architecture drift`. Never write `Hunt #N` or skill-internal references in the output.
+**`Pattern` column uses plain-English labels**: `silent failure`, `framework drift`, `cascading drift`, `unsafe migration`, `UI-only authz`, `duplicated helper`, `redundant code`, `unjustified addition`, `dead code`, `missing tests`, `code sweep`, `sibling mismatch`, `hand-edited generated file`, `leftover artifact`, `architecture drift`, `near-duplicate`, `crammed logic`, `magic literal`, `suppressed analyzer`, `change-narration`, `worthless test`, `untested failure path`, `excused failure`, `dependency provenance`, `structured logging`. Never write `Hunt #N` or skill-internal references in the output.
 
 **Imperative verbs in fix half**: `Add`, `Move`, `Delete`, `Extract`, `Inline`, `Rename`, `Mark`, `Replace`, `Reject`, `File issue`, `Revert`, `Wrap`, `Split`. Avoid `Consider`, `Pick one`, `Maybe`, `You might want to`.
 

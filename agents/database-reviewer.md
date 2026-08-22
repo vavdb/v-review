@@ -73,6 +73,12 @@ Walk these on every diff. Tag severity per the project's review rule file (typic
 
 #### 1f. Global query filter bypass
 - **`.IgnoreQueryFilters()`** is security-sensitive. Every occurrence needs a one-sentence justification in the diff (a comment, a clear caller-policy doc). If the project's CLAUDE.md says global filters enforce tenant scoping, this is HIGH severity.
+- **On EF Core 10, blanket `.IgnoreQueryFilters()` is HIGH, not MEDIUM.** EF 10 supports **named query filters** — multiple filters per entity type, each disableable independently via `.IgnoreQueryFilters(["SoftDelete"])`. Bypassing the soft-delete filter no longer requires taking the tenant filter down with it, so "I had to drop them all" stopped being true. Check the project's TFM before applying this rule: it needs `net10.0` + EF Core 10.
+
+#### 1h. EF Core 10 LINQ surface (check the TFM first)
+- **`GroupJoin` + `SelectMany` + `DefaultIfEmpty` gymnastics** in new code on EF Core 10 — `LeftJoin` / `RightJoin` are first-class LINQ operators now. The old shape is legacy, and it's also the shape people get subtly wrong.
+- **Hand-rolled serialize-whole-document-and-overwrite** on a JSON-mapped complex property — EF Core 10 supports updating JSON data in place where the database does (SQL Server 2025 / Azure SQL). Verify the provider before recommending.
+- Do **not** flag either of these on `net8.0` / `net9.0` projects. Recommending an operator the project cannot compile is a false positive.
 
 #### 1g. Async + cancellation
 - **`.ToListAsync(...)` / `.FirstOrDefaultAsync(...)` / `.SaveChangesAsync(...)` without `CancellationToken`** — caller cancellation can't reach the DB. Plumb the token from the handler / controller all the way down.
