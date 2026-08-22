@@ -7,15 +7,15 @@
   },
   "metadata": {
     "description": "Single-plugin marketplace shipping v-review — the future-check code review skill with bundled .NET / data-access / E2E / security reviewer subagents.",
-    "version": "0.9.0",
+    "version": "0.11.0",
     "homepage": "https://github.com/vavdb/v-review"
   },
   "plugins": [
     {
       "name": "v-review",
       "source": "./",
-      "version": "0.9.0",
-      "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Walks an 18-item hunt list (silent failures, unjustified additions, duplicate helpers, parallel-instance config drift, UI-only authz, etc.) and dispatches five bundled subagents in parallel: csharp-reviewer, database-reviewer (in-code data access), database-schema-reviewer (schema design), playwright-test-reviewer (E2E discipline), security-reviewer (mandatory cascade-analysis security pass).",
+      "version": "0.11.0",
+      "description": "The future-check code review skill. Triggered by 'review this branch', 'review my PR', 'look at the diff'. Runs in two modes — diff review and whole-repo audit — walking a 26-item hunt list (silent failures, unjustified additions, duplicate helpers, near-duplicate clones, over-terseness, magic literals where a constant exists, hallucinated/slopsquatted packages, worthless tests, failures excused as 'known flaky', requirement drift, quality-gate weakening, parallel-instance config drift, UI-only authz, etc.) and dispatches five bundled subagents in parallel: csharp-reviewer, database-reviewer (in-code data access), database-schema-reviewer (schema design), playwright-test-reviewer (E2E discipline), security-reviewer (mandatory cascade-analysis security pass).",
       "author": {
         "name": "Vincent van den Braken",
         "url": "https://github.com/vavdb"

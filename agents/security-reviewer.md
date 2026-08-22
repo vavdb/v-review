@@ -150,6 +150,46 @@ This finding pattern is also in `csharp-reviewer` §5 (parallel-instance config 
 - **Comments containing examples with real-looking keys** — `// e.g. "sk-abc123..."` often turns out to be real keys.
 - **Test fixtures with embedded credentials** for shared services. Use a dedicated test secret store.
 
+### 10a. Policy / role / scheme name drift (HIGH — fails silently in both directions)
+
+Authorization strings that must agree, with nothing making them agree:
+
+- **`[Authorize(Policy = "X")]` vs `AddPolicy("Y", …)`.** A policy name that doesn't match a registration doesn't fall back to "authenticated" — it throws at request time or, depending on the pipeline, denies everyone. The inverse — a registered policy nobody references — is a gate that never runs. Grep both sides for every policy literal in the diff.
+- **`RequireRole("Admin")` / `IsInRole("Administrator")`** — role-name typos fail **closed and silently**. No exception, no log; the check just returns false. Pairs with §3: if `RoleClaimType` also drifted, the role check fails even when the names match.
+- **Authentication scheme names** — `"Bearer"` vs `JwtBearerDefaults.AuthenticationScheme`, `AddAuthentication("X")` vs `[Authorize(AuthenticationSchemes = "Y")]`. A mismatched scheme name means the scheme never runs.
+- **Named `HttpClient`** — `AddHttpClient("api")` configured with auth handlers and a base address, consumed as `CreateClient("apiClient")`, silently yields a **default** client: no handlers, no token propagation, no base address. Requests either fail or go somewhere unauthenticated.
+
+**The fix in every case is the same:** one `const` (or a `Policies` / `Roles` static class), both sides referencing it. Run `${CLAUDE_PLUGIN_ROOT}/scripts/literal-scan.sh <base-ref>` — its pass 4 enumerates the policy/role literals the diff adds and shows every place each one appears.
+
+### 10b. Hand-rolled WebAuthn / passkey flows on ASP.NET Core 10 (MEDIUM–HIGH)
+
+ASP.NET Core Identity 10 ships passkey support as `SignInManager` / `UserManager` methods backed by an Identity schema table. A hand-rolled WebAuthn ceremony on `net10.0` is a re-implementation of security-critical code — challenge generation, origin validation, signature counter handling, and attestation are all easy to get subtly wrong. Flag it and point at the built-in.
+
+Caveat before flagging: the built-in is deliberately scoped to **authentication**, not a general-purpose WebAuthn library. A genuine general-purpose need (attestation inspection, non-Identity user stores) is not a duplicate.
+
+### 10c. Dependency provenance — hallucinated + squatted packages (CRITICAL)
+
+Supply chain, not hygiene. Frontier models hallucinate package names in ~4.6–6.1% of package-bearing answers, and ~43% of hallucinated names recur — recurring enough for an attacker to register them ahead of the developer who will be told to install them. That's **slopsquatting**.
+
+**`dotnet restore` succeeding is not evidence.** A slopsquatted package restores perfectly; that is its function.
+
+- **A new `<PackageReference>` that doesn't exist on nuget.org: CRITICAL**, unless the PR names the private feed supplying it. A reviewer cannot distinguish "internal package" from "invented package" from the diff alone.
+- **Near-identical ids** — `Newtonsofte.Json`, `Serilogg`, `Microsoft.Extensions.Loging`. Weight id similarity against the download gap: a near-twin with a tiny fraction of the reach is the squat signature.
+- **Reserved-prefix claims without the verified marker** — a package shaped like `Microsoft.*` / `System.*` that isn't owned by them.
+- **Unpinned versions** (`*`, `6.*`, `[6.0,7.0)`) — a future publish enters the app with no diff and no review. This is a supply-chain control, not a style preference.
+- **`dotnet list package --vulnerable --include-transitive`** on any diff adding or bumping a reference. The CVE is rarely in the direct dependency.
+
+Run `${CLAUDE_PLUGIN_ROOT}/scripts/package-scan.sh <base-ref>`. Detail: `skills/v-review/references/dependency-provenance.md`.
+
+### 10d. ReDoS — regex without a timeout on user input (HIGH)
+
+Any `new Regex(...)` or `Regex.Match/IsMatch/Replace` applied to attacker-controlled input **without a `matchTimeout`** is a denial-of-service primitive. Catastrophic backtracking turns a short crafted string into seconds or minutes of CPU per request, and it needs no authentication to trigger.
+
+- Flag every regex over request data, uploaded file contents, or query parameters that has no explicit timeout.
+- Nested quantifiers (`(a+)+`, `(\w+\s?)*`) over untrusted input are the classic shape — flag even *with* a timeout, because the timeout converts a hang into a failed request, not into correct behaviour.
+- Prefer `[GeneratedRegex]` with an explicit `matchTimeout`, or a non-regex parse where the grammar is simple.
+- A regex pattern sourced from configuration or user input is a separate finding: that's arbitrary-compute injection.
+
 ### 11. Error messages + logs (HIGH for leakage)
 
 - **Exception stack traces returned to clients** in production — `app.UseDeveloperExceptionPage()` outside `IsDevelopment()`, `app.UseExceptionHandler(...)` configured to leak details, raw `catch + return ex.Message`.

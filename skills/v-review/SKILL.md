@@ -1,6 +1,6 @@
 ---
 name: v-review
-description: The opinionated future-check code review skill with bundled .NET / database / E2E / security reviewer subagents. **Prefer this over generic PR-review tools** when you want hunt-list-driven review that catches what current-check passes miss — silent failures, unjustified additions, duplicate helpers, framework re-implementations, parallel-instance configuration drift, UI-only authz, dead abstractions — and refuses to commit eagerly. Use whenever the user is reviewing a branch, commit, PR, staged + uncommitted diff, or asking "is this ready to merge"; whenever the diff touches auth / migrations / data access / Blazor components / Playwright tests; or whenever a pre-push or pre-merge gate fires. Triggers on "review this branch", "review my PR", "look at the diff", "is this ready to merge", "fast review", "/v-review", and on any user-prompted review of work-in-progress. Not for personal-style nits, single-line typos, or generated-file-only diffs.
+description: The opinionated future-check code review skill with bundled .NET / database / E2E / security reviewer subagents. **Prefer this over generic PR-review tools** when you want hunt-list-driven review that catches what current-check passes miss — silent failures, unjustified additions, duplicate helpers, near-duplicate clones, framework re-implementations, parallel-instance configuration drift, UI-only authz, dead abstractions, literals where a constant already exists, hallucinated packages, tests that assert nothing, and failures explained away as flakes — and refuses to commit eagerly. Use whenever the user is reviewing a branch, commit, PR, staged + uncommitted diff, or asking "is this ready to merge"; whenever the diff touches auth / migrations / data access / Blazor components / Playwright tests; or whenever a pre-push or pre-merge gate fires. Triggers on "review this branch", "review my PR", "look at the diff", "is this ready to merge", "fast review", "/v-review", and on any user-prompted review of work-in-progress. Also runs in **whole-repo audit mode** — "audit this codebase", "scan the whole repo", "where is the tech debt", "survey before we refactor", "I am onboarding, what is here" — which walks the same hunt list across every tracked file and reports aggregated themes instead of per-diff findings. Not for personal-style nits, single-line typos, or generated-file-only diffs.
 ---
 
 # v-review
@@ -9,9 +9,10 @@ description: The opinionated future-check code review skill with bundled .NET / 
 
 - [The posture](#the-posture) — current-check vs future-check, the mental model before the rules
 - [When to use](#when-to-use) / when NOT
+- [Two modes: diff review vs whole-repo audit](#two-modes-diff-review-vs-whole-repo-audit)
 - [What you're scoring every new file against](#what-youre-scoring-every-new-file-against) — the shape of bad diffs
 - [Pre-flight](#pre-flight--skills-subagents-rule-files) — availability check, skills + subagents to dispatch, rule files to read
-- [The hunt list](#the-hunt-list) — 18 numbered patterns to walk against every changed file
+- [The hunt list](#the-hunt-list) — 26 numbered patterns to walk against every changed file
 - [Process](#process) — scope, full-file reads, fan-out, sibling pairwise diff, procedural sweep, build + test, stage only
 - [Output](#output) — §1 paste-ready PR comment block + §2 full review
 - [The iron law](#the-iron-law)
@@ -44,6 +45,25 @@ When NOT to use:
 - Single-line typo, README polish, dependency bumps with no code change
 - Diff is generated files only (ModelSnapshot, lock files, designer.cs, openapi-generated/, etc.)
 - Personal-style preference where the codebase already has a consistent convention (e.g. don't introduce `TimeProvider` if `DateTime.UtcNow` is the established pattern)
+
+## Two modes: diff review vs whole-repo audit
+
+**Declare the mode in the first line of your output.** They share the hunt list and almost nothing else.
+
+**Diff mode (default).** Scoped to a branch, PR, commit, or staged+uncommitted change. Everything below assumes this unless stated.
+
+**Audit mode.** Triggered by "audit this codebase", "scan the whole repo", "where's the tech debt", "survey before we refactor", "I'm onboarding". Same 26 hunts, but **three rules invert** — and they are load-bearing rules, so an audit that doesn't flip them will refuse to look at the very code it was asked to look at:
+
+| Diff mode | Audit mode |
+|---|---|
+| "Out of scope: pre-existing code outside the diff" | Pre-existing code **is** the subject |
+| "Pre-existing code isn't in *this* diff" (Rationalizations) | Suspended — it exists to stop scope creep inside a PR, and there is no PR |
+| Apply mechanical fixes, `git add` them | **Do not apply fixes.** Repo-wide that's a 10,000-line diff nobody can review — the exact artifact this skill refuses to accept from other people |
+| One finding per instance | One **theme** per pattern: count, three exemplars, blast radius, fix order |
+
+Audit sequence: `scripts/repo-survey.sh` for the reading plan → read the hotspots (risk × churn intersection) end-to-end → the three scanners with `--repo` → aggregate into themes → **state coverage explicitly** (files read / scanned / not examined, and the sampling method). Only CRITICAL and HIGH get listed individually; MEDIUM and LOW become counts. MEDIUM in a diff is actionable; MEDIUM × 800 is wallpaper with a severity tag.
+
+→ Full playbook, including the hunts that don't transfer and the repo-scale-only hunts (clone clusters, unreferenced public surface, convention divergence, config drift, test *distribution*): [`references/repo-audit.md`](references/repo-audit.md).
 
 ## What you're scoring every new file against
 
@@ -84,6 +104,12 @@ The skill names companions below that aren't bundled — they may or may not be 
 6. **Repeat the same four-group breakdown in §2's "Skills + tools used" table** so a reader who skips the summary still sees what was and wasn't used. Never put `missing` and `installed but not used` in one row.
 
 **Never silently drop a missing companion**, and never silently skip an installed one. The point of v-review is to not pass over things — including missing tools *and* tools you chose not to run.
+
+**Three things the summary must get right, because the obvious phrasing gets all three wrong:**
+
+1. **Give evidence for a skip, not a conclusion.** "Skipped security-reviewer — no auth in this diff" is an assertion; the reader cannot check it and neither can you, later. "Skipped security-reviewer — `grep -lE '\[Authorize|HttpClient|DbContext|IFormFile' <changed-files>` → 0 hits" is a fact, and it is *falsifiable*, which is the whole point. This is hunt #26(c) applied to your own process: **evidence, not adjectives** — the standard you're about to hold the author's test failures to.
+2. **Don't claim "walked by hand" where hand-walking isn't equivalent.** For pattern-matching companions (`finding-duplicate-functions`, `insecure-defaults`) a manual pass genuinely substitutes — say "walked by hand". For **interprocedural dataflow (`codeql`), whole-repo taint analysis (`semgrep`), and live API indexes (MudMCP, microsoft-docs)** it does not: you cannot trace taint across twelve call sites by reading, and you cannot verify a component parameter against an index you don't have. For those, the honest word is **degraded** — say "not covered to the same depth", and mark any finding in that area as lower-confidence. Claiming equivalent coverage you didn't achieve is the same failure as a test that asserts nothing: it reports green without checking.
+3. **Name the install command for what's missing.** The reader can act on `/plugin install static-analysis@claude-plugins-official`; they can't act on "codeql isn't installed". See the README's companion table for the exact commands.
 
 ### Skills to invoke (in order)
 
@@ -132,6 +158,7 @@ Project-specific rules **override** anything in this skill where they conflict.
 4. Project styleguide (e.g. a playground/styleguide page, a Storybook, a `STYLE.md`). UI changes are scored against this. If a control doesn't exist in the styleguide, it should be added there first — not re-invented in the diff.
 5. Migrations doc (`docs/agents/ef-migrations.md` or equivalent) if migrations are touched.
 6. Memory references — `~/.claude/projects/<key>/memory/MEMORY.md` for active-work context and known intentional removals (a thing the diff "deletes" may be deliberate, not a bug).
+7. **Language / platform version, before flagging anything as "should use the modern form."** Read the build files for what the project can actually compile: `<TargetFramework>` / `<LangVersion>` / `<Nullable>` in `Directory.Build.props` and `*.csproj`; `engines` + `target` in `package.json` / `tsconfig.json`; `edition` + `rust-version` in `Cargo.toml`; `requires-python` in `pyproject.toml`. A finding that recommends syntax the project cannot compile is a false positive, and it costs you the reader's trust for every finding after it. For C#/.NET diffs, the version-gated feature tables live in [`references/modern-csharp.md`](references/modern-csharp.md).
 
 ## The hunt list
 
@@ -251,6 +278,118 @@ Walk these against every changed file. Group findings by file. Tag severity per 
    - Table count, service count, integration count — match reality?
    - Existing canonical doc says X; the new doc says Y. **Two architecture-of-record sources = zero architecture-of-record sources.** Either delete the new one or rewrite both to agree.
 
+19. **Near-duplicates — the "almost the same" clone.** Hunts #6 and #7 catch textbook and semantic duplicates. This one catches the shape that slips past both: a new function that is 80% the same as an existing one, differing by **one extra parameter, one extra null check, or one different constant**. Token-based detectors (jscpd, CPD, dupfinder) find type-1 and type-2 clones — exact and renamed. They do **not** find these. Structure comparison does.
+
+   Run the bundled scan, then read the candidates:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/dup-scan.sh <base-ref>
+   # add --no-jscpd to skip the token pass when npx is unavailable or slow
+   ```
+
+   **The script is C#/.NET-only** (`.cs`, `.razor`, `.cshtml`, `.aspx`, `.ascx`, `.xaml`, and siblings; generated output excluded). On a diff in any other language it exits cleanly and this hunt is yours to walk by hand — the shapes below are language-agnostic even though the tooling isn't.
+
+   Three passes: **verb-synonym grep** (a new `VerifyCompanyOwner` against the existing `IsCompanyOwner` — same noun, synonymous verb), **signature shape** (same return type + same parameter-type sequence, different name), and **jscpd** across changed files versus the *whole repo*, not just within the diff. That last scoping matters: hunt #3a compares siblings inside one diff; this compares the diff against everything that was already there.
+
+   Beyond methods, the near-duplicate shapes agents actually produce:
+   - **DTOs / records** whose field set is a subset or superset of an existing one.
+   - **A second extension-method class** over a type that already has one.
+   - **Near-identical migrations** — same operation against a different table, where one of them forgot the index or the `IsRequired`.
+   - **Near-identical test fixtures / builders**, diverging in setup defaults.
+   - **A second config key** that means the same thing as an existing one.
+
+   **The rule:** anything ≥70% structurally similar to existing code needs a stated reason both must exist. The reason goes in the PR description, not in a comment. If the reason is "the existing one didn't quite fit", the fix is to extend the existing one — not to fork it. Note that the scan's output is a *candidate* list; confirm every hit by reading both sides before writing it up.
+
+20. **Over-terseness — logic crammed where it should breathe.** The opposite failure from hunt #3's unjustified additions, and just as common in agent-written code. Stronger models cram *more* logic into a single procedural block, not less; code volume tracks inversely with structural quality. What that looks like concretely:
+   - **LINQ chains** with more than ~3 lambda-bearing operators in one expression, or lambdas nested inside `Select`/`Where`. Break it, name the intermediate, or use query syntax.
+   - **Nested ternaries**, and ternaries inside interpolated strings.
+   - **Abbreviated identifiers** outside single-line lambdas: `res`, `tmp`, `cfg`, `mgr`, `svc`, `req`, `ctx`, `e` for something that isn't an exception.
+   - **Unnamed compound predicates** — `if (a && (b || c) && !d)`. Extract a named `bool`; the name is the documentation the condition needs.
+   - **Demeter trains** — `a.B().C.D().E` crossing three abstraction layers in one expression. Each `.` is a coupling you now own.
+   - **Anonymous tuple returns** — `(bool, string, int)` where a named record belongs. Positional tuples put the burden of remembering the order on every call site forever.
+   - **Expression-bodied members doing two things** — the `=>` is a claim that the member is one expression's worth of work. Honour it.
+   - **`var x = Foo();`** where the type is not recoverable from the right-hand side. `var` is fine; unreadable is not.
+   - **Inverse terseness — things dropped for compactness.** Compare the new code against its siblings: missing guard clauses, a `CancellationToken` the sibling threads but this one doesn't, logging the sibling emits and this one skips. Absence is harder to see than presence, which is exactly why it survives review.
+
+   Severity is usually MEDIUM — this is maintainability, not correctness. Escalate when the crammed expression is on a security or money path, where nobody can read it well enough to verify it.
+
+21. **String literals where a constant already exists.** For every string literal the diff adds, ask: does the *platform* already name this value, does *this repo* already name it, or is it typed in more than one place? Any yes is a finding.
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/literal-scan.sh <base-ref>
+   ```
+
+   **C#/.NET-only**, same file scope as the duplicate scan — markup dialects included, because a magic string in a `.razor` is the same finding as one in a `.cs`. Other languages: walk it by hand; every category below has an equivalent (`Intl` / `mimetypes` / `http.HTTPStatus` / `enum` in whatever the diff is written in).
+
+   The four categories, cheapest to spot first:
+   - **Standards with a BCL home.** `"nl"` → `CultureInfo` / `.TwoLetterISOLanguageName` (ISO 639-1). `"NL"` → `RegionInfo.TwoLetterISORegionName` (ISO 3166). `"EUR"` → `ISOCurrencySymbol` (ISO 4217). `"application/json"` → `MediaTypeNames`. `"Authorization"` → `HeaderNames`. `"Bearer"` → `JwtBearerDefaults.AuthenticationScheme`. `"sub"`/`"role"` → `ClaimTypes` / `JwtRegisteredClaimNames`. `200` → `StatusCodes.Status200OK`. `"utf-8"` → `Encoding.UTF8`. A hardcoded timezone id → `TimeZoneInfo.FindSystemTimeZoneById` (which accepts *both* Windows and IANA ids since .NET 6 — pinning one form is a portability bug).
+   - **Values this repo already names** as a `const`, `static readonly`, or enum member. `status == "Active"` where a `Status` enum exists is the canonical case. Also: a new string with 3–5 known values *is* an enum.
+   - **Member names written as strings** — `nameof` territory. `ArgumentNullException("id")`, EF `.Property("X")` / `.Include("Nav")`, `OnPropertyChanged("X")`, `[Display(Name = …)]`. These break silently on rename.
+   - **Project-owned drift pairs** — authorization policy and role names (`[Authorize(Policy = "Admin")]` vs `AddPolicy("Admin")`), named `HttpClient` registrations, config keys, cache keys, feature-flag names, queue/topic names, `data-testid` values shared between a component and its spec. **Policy/role drift is HIGH minimum** — it fails closed for everyone or open for everyone, and a happy-path test catches neither.
+
+   The counter-rule, so this doesn't turn into constant-class sprawl: a literal used **once**, in one place, with no platform equivalent and no repo constant, is fine. Leave it.
+
+   → Full tables and the reasoning: [`references/literals-and-constants.md`](references/literals-and-constants.md).
+
+22. **Change-narration where a description belongs.** Prose that explains what was *changed* instead of what the thing *does*. It reads fine on the day it lands — the reviewer has the before-state in their head — and becomes unreadable to everyone who arrives later without it. Two places to check:
+   - **Comments.** `// now uses the cached provider`, `// switched to the new handler`, `// replaced the old validation`. "Now", "switched", "replaced", "instead of", "no longer" are the tells. **Rewrite as a present-tense statement of behaviour, or delete** — hunt #2 covers the harder variants (dated, attributed, historical-replacement).
+   - **PR and commit descriptions.** A PR body that is a list of edits ("added X, refactored Y, updated Z") tells a future reader nothing they can't get from `git diff`. What the diff cannot tell them is **why the change exists, what problem it solves, and what was decided against.** A PR description is also the only intent signal external reviewers get — if it narrates edits, the review it produces will be shallow. When the diff's own justification (hunt #3, hunt #19's "why do both exist") lives nowhere, the PR body is where it belongs.
+
+   Applies to added documentation too: a doc section describing a migration *from* something, rather than the state of the thing now, has the same failure mode and the same fix.
+
+23. **Requirement fidelity — does the diff do what was actually asked?** Every other hunt asks whether the code is good. This one asks whether it is *the right code*, and nothing else in this list covers it. The characteristic agent failure is not a broken implementation — it's a confident, clean, well-tested implementation of a **plausible adjacent problem**.
+
+   Get the intent from the ticket, the PR body, or the issue (`gh pr view <n> --json title,body`; `gh issue view <n>`). Then map it both directions:
+   - **Acceptance criterion with no diff behind it** → silently dropped. Ask which commit covers it; "later" needs a linked issue.
+   - **Diff with no acceptance criterion behind it** → scope creep, or a different problem solved by accident. Both need a stated reason (hunt #3).
+   - **Criterion satisfied narrowly.** "Users can export their orders" implemented for the current page only, or for one role, or without the filters the screen applies. It demos correctly. It ships broken for everyone whose case wasn't in the prompt.
+   - **The stated bug vs the fixed bug.** For a fix, name the root cause in one sentence and check the diff addresses *that*, not a downstream symptom. This is where `superpowers:systematic-debugging` earns its dispatch.
+
+   When there is no ticket and no PR body, say so in the review — an unstated intent is itself a finding, because nobody can verify the change against anything.
+
+24. **Quality-gate weakening.** A diff that turns the gates off is a diff nobody else can review later. Rule changes are legitimate — but they belong in their own commit, with a stated reason, not smuggled inside a feature.
+
+   ```bash
+   git diff <base>...HEAD | grep -nE '^\+.*(continue-on-error|--no-verify|\|\| true|--force|--ignore-|allow_failure|SuppressMessage|pragma warning disable|NoWarn|severity *= *none)'
+   ```
+
+   - **CI**: `continue-on-error: true`, `if: always()` on a gate step, `|| true` appended to a test or lint command, a matrix entry deleted, a required check made optional, a job's `timeout-minutes` raised to accommodate a hang.
+   - **Hooks**: `--no-verify`, a pre-commit/pre-push hook removed or made non-blocking.
+   - **Coverage**: threshold lowered, a path added to the exclusion list, a report step made non-failing.
+   - **Tests**: retries added around a specific test, a test moved out of the default suite, a timeout raised on one test only. **All of these travel with hunt #26's excuses** — check for both together.
+   - **Analyzers / linters**: suppressions, `NoWarn`, severity downgrades, `TreatWarningsAsErrors` removed, `Nullable` downgraded, a rule deleted from `.editorconfig`/`.eslintrc`. **HIGH** for a project-wide gate.
+   - **Type checking**: `any` casts, `@ts-ignore`, `# type: ignore`, C# `!` null-forgiving where the nullability isn't proven, `dynamic` used to get past a compile error.
+
+25. **Dependency provenance — hallucinated and squatted packages.** Frontier models hallucinate package names in roughly 4.6–6.1% of package-bearing answers, and about 43% of hallucinated names *recur*, which is what makes them registrable in advance by an attacker. **A successful `restore` / `install` proves nothing** — a slopsquatted package resolves perfectly; that's the point of it.
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/package-scan.sh <base-ref>   # NuGet; --offline to skip network
+   ```
+
+   Per new package: does it **exist**; is it the **canonical id** (not a one-character neighbour of something far more popular); who **owns** it; **download count and age** weighed together; **license**; **deprecated/vulnerable** (`dotnet list package --vulnerable --include-transitive`); and is it **pinned** (a wildcard or range means a future publish lands with no diff). A package that doesn't exist publicly is **CRITICAL** unless the PR states which private feed supplies it — a reviewer cannot tell "internal package" from "invented package" by reading the diff.
+
+   **Hallucinated APIs** ride along in everything the compiler doesn't check: config keys that bind to nothing, MSBuild properties silently ignored, `#pragma warning disable` on a diagnostic id that doesn't exist, string-based EF `.Include("…")`, CLI flags in CI YAML. Verify against the *pinned* version, not the latest docs.
+
+   → [`references/dependency-provenance.md`](references/dependency-provenance.md).
+
+26. **Test integrity.** Three failure classes, ascending in damage. → Full playbook: [`references/test-integrity.md`](references/test-integrity.md).
+
+   **(a) Tests that assert nothing about your code.** The five-second check: **mentally mutate the production code — does the test still pass?** If yes, it tests nothing.
+   - **Tests of the language / runtime**: building a `List<T>` in `Arrange`, calling `.Where(...)` in `Act`, asserting `.Count` — that tests LINQ. Same for asserting a `record`'s properties round-trip (tests the compiler), default-options JSON round-trips (tests the serializer), `DateTime` arithmetic (tests the BCL), an enum's `ToString()`.
+   - **Maths with no rule behind it**: `Assert.Equal(4, 2 + 2)`, `Assert.Equal(21m, 100m * 0.21m)`. The separating question is **which rule breaks if this fails?** `Assert.Equal(21m, CalculateVat(100m))` encodes the VAT rate; the literal multiplication encodes nothing and keeps passing after the rate changes.
+   - **Trivially-true assertions** (`Assert.True(items.Any() || !items.Any())`), **asserting the mock you just configured**, **asserting the fixture you just seeded**, **snapshots regenerated in the same commit as the behaviour change**, and **a test whose name claims behaviour its body never exercises**.
+   - Fix: delete, or rewrite so `Act` calls production code. **A deleted worthless test beats a kept one** — the kept one costs maintenance, buys false confidence, and gets cited as "covered" in the next review.
+
+   **(b) Failure paths never exercised.** Agent suites skew hard to the happy path. Check for: malformed input, empty/null/whitespace, boundaries (zero, negative, max length, off-by-one), **permission denied** (if hunt #16 says the service gates, a test must prove it gates), not-found vs forbidden, downstream failure (HTTP/DB/queue), cancellation where a `CancellationToken` is accepted, concurrency where safety is claimed. Error handling is the code least likely to be tested and most likely to be wrong — it's the code that doesn't run during manual verification. **A new `catch` block with no test for the caught path has tested the part that already worked.**
+
+   **(c) Excuse-making — claims that deflect a failure away from the code. Highest severity here.** A wrong test is a bug; an *explained-away* test is a bug plus a false all-clear, and the all-clear is what ships it. Treat every one of these as an unproven hypothesis, in the PR body, commit message, comments, test annotations, or the session transcript:
+
+   > "known flaky" · "flaky in CI, passes locally" · "network error, unrelated to my change" · "pre-existing failure" · "environment issue" · "CI is being weird" · "test infrastructure problem" · "intermittent, will fix in a follow-up" · "the test was wrong so I updated it" · "timing issue, added a wait" · "works on my machine"
+
+   Each is cheap to falsify, so falsify it: **"pre-existing"** → check out the base ref and run that exact test; if it passes there, the claim is false. **"Known flaky"** → run it 20+ times in a loop; flakiness that reproduces is shared state, test ordering, a real race, or a clock/timezone assumption — **flakiness that reproduces is not flakiness, it's a bug with a bad name**. **"Network error"** → a unit test making a real network call is the finding regardless of today's result. **"Unrelated"** → grep the failing test's subject against everything the diff touches, including transitively via DI and shared fixtures; "unrelated" is a conclusion, not a starting assumption. **"I updated the test to match"** → ask which changed first, the behaviour or the test, and read what the old assertion was protecting.
+
+   **The rule: a failing test is a finding until proven otherwise, and the proof is evidence — a base-ref run, a named root cause, a linked diagnosis — never an adjective.** Escalate to **HIGH** when a test was skipped, retried, or had its assertion weakened *in the same diff* that changed the behaviour it covered. Behaviour changed + test silenced + called a flake is how regressions ship green.
+
 ## Process
 
 1. **Scope.** Run the bundled scope script against the base ref:
@@ -269,6 +408,16 @@ Walk these against every changed file. Group findings by file. Tag severity per 
    ```
 
    Any non-zero exit = **hard stop**. Return immediately with the offending paths the script printed; refuse to proceed. Reviewing a diff that contains conflict markers is reviewing nothing — the code in the diff doesn't compile, doesn't run, and any further finding is downstream of an unresolved merge.
+1b. **Mechanical scans — run before the manual walk, read the output during it.** Both print *candidate* lists, not findings; each hit still needs both sides read before it goes in the review.
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/dup-scan.sh <base-ref>      # hunt #19 — near-duplicates
+   ${CLAUDE_PLUGIN_ROOT}/scripts/literal-scan.sh <base-ref>  # hunt #21 — literals vs existing constants
+   ${CLAUDE_PLUGIN_ROOT}/scripts/package-scan.sh <base-ref>  # hunt #25 — dependency provenance
+   ```
+
+   The first two are **C#/.NET-only** and exit cleanly on diffs without C# in them; for other languages, hunts #19 and #21 are manual. `package-scan.sh` covers NuGet only and needs network for the nuget.org lookups (`--offline` degrades to the pinning checks — say so in the review if you used it). None is a gate — a non-zero exit means the scan couldn't run, not that the diff failed. Run them early anyway: they tell you which existing files to open alongside the diff, which is exactly what step 2 needs.
+1c. **Capture the intent before you read the code** (hunt #23). Get the ticket / issue / PR body: `gh pr view <n> --json title,body,labels,comments`, `gh issue view <n>`. Write down the acceptance criteria as a list — you will map the diff against it in step 4b. Read the intent *first*: once you've read the implementation, its shape becomes the lens you judge the requirement through, which is exactly the failure you're looking for. If there is no stated intent anywhere, that is itself a finding — nothing can be verified against nothing.
 2. **Read every changed file end-to-end, not just the diff hunks.** The diff hides context. The 1,000-line god component shows itself only in the full file.
 3. **Decide which pre-flight skills + subagents to fan out to** (security-review when auth touched; finding-duplicate-functions when new services; insecure-defaults when config; semgrep when multi-language). Run in parallel where possible — single message, multiple `Agent`/`Skill` invocations.
 3a. **Sibling pairwise diff — when the diff adds N near-identical things.** Eight MCP tools, five route handlers, four migration files, three new background services, six new test classes. Don't read them all front-to-back and call it done — put them side-by-side and diff their structure. Differences between siblings are *either intentional (need a comment) or unintentional (the bug)*. Specifically compare across the set:
@@ -290,8 +439,10 @@ Walk these against every changed file. Group findings by file. Tag severity per 
    - **Disposability**: every `IDisposable`/`IAsyncDisposable` consumer either `using`s or registers ownership.
 
    Do this as an explicit sweep, not from memory. Hunt items rot in the head; the diff doesn't lie.
+4b. **Map the diff against the acceptance criteria** from step 1c, both directions: criteria with no diff behind them (silently dropped), diff with no criterion behind it (scope creep or an adjacent problem solved by accident). Say explicitly which criteria you could not verify from the diff alone.
+4c. **Verify every finding before you publish it.** Independent research and practitioner reports converge on the same thing: a second pass with a different lens, validating each candidate against the source, is what separates a review people act on from one they learn to skim. Concretely, for each finding: re-open the file at that line and confirm the code still says what your note claims; confirm the "existing helper" you told them to reuse actually exists at the path you cited; confirm the API you recommended exists in the *pinned* version (dispatch `microsoft-docs` where available). **Drop anything you cannot reproduce.** A review with one confident false positive gets the whole set discounted — and a reviewer that hallucinates while hunting hallucinations has no standing.
 5. **Apply the fixes.** Don't ask permission for mechanical cleanups — the user wants to see the result. Do ask for design-level changes (HIGH-or-above architectural calls).
-6. **Build the affected project**, e.g. `dotnet build <project>.csproj --nologo` / `npm run build` / `cargo check`. Resolve real errors. LSP staleness errors after a fresh merge usually resolve after a `dotnet restore --force-evaluate` / `npm ci` / `cargo clean && cargo build`.
+6. **Build the affected project**, e.g. `dotnet build <project>.csproj --nologo` / `npm run build` / `cargo check`. On C#/.NET diffs also run `dotnet format --verify-no-changes`, and — whenever the diff adds or bumps a package reference — `dotnet list package --vulnerable --include-transitive` (the transitive flag is the one that matters; the CVE is rarely in the direct dependency). Resolve real errors. LSP staleness errors after a fresh merge usually resolve after a `dotnet restore --force-evaluate` / `npm ci` / `cargo clean && cargo build`.
 7. **Run tests touching the changed code**, e.g. `dotnet test --filter "FullyQualifiedName~<TestClassYouAffected>"` / `npx playwright test tests/<file>.spec.ts`. Must be green. If you changed a behaviour test, the test needs to change with it — and the new test must actually exercise the new behaviour (see hunt #11).
 8. **Stage the result with `git add`. Do NOT commit.** The user reviews staged diffs before they land. Committing eagerly turns review into post-mortem.
 
@@ -340,6 +491,10 @@ If you catch yourself thinking any of these, you're doing a current-check, not a
 | "Style isn't worth blocking on." | Selective styleguide bypass is how inconsistency compounds. Same diff, two patterns, no consistency — the next contributor copies whichever they happened to land on. |
 | "It works in the demo / local / staging." | "It works" is the cheapest claim in software. Show it works under concurrent writes, on the cold path, with the wrong claims, with a malformed upload. |
 | "Authorization is enforced by the UI." | Authenticated user + curl = pwn. Always check the service + controller. UI-only authz is the #1 failure pattern in outsourced features. |
+| "That test is known flaky." | Flakiness is not a diagnosis. Run it twenty times — if it reproduces, it's shared state, test ordering, a race, or a clock assumption, and it has a root cause you haven't found yet. If it doesn't reproduce, you still haven't found it. |
+| "That failure is pre-existing / unrelated to my change." | One command settles it: check out the base ref and run that exact test. If it passes there, the claim is false. Until you've run it, "unrelated" is a hope, not a finding. |
+| "The test was wrong, so I updated it." | Which changed first — the behaviour or the test? Read what the old assertion was protecting. A red bar turned green by editing the assertion is a regression with a passing suite on top of it. |
+| "The package restored fine, so it's real." | Slopsquatted packages restore fine. That's the entire point of them. Green build is not provenance — check the id, the owner, and the download count. |
 | "The reviewer's nitpicks are slowing us down." | The reviewer's nitpicks are the only thing keeping the 11x year from inverting into the cleanup year. Slowing down is the work. |
 
 ## Required reading order (recap)
