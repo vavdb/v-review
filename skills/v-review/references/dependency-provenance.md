@@ -17,8 +17,8 @@ repeatably is a name an attacker can register in advance and wait on. The
 attack has a name: **slopsquatting**.
 
 The trap for reviewers: **`dotnet restore` succeeding proves nothing.** A
-slopsquatted package restores perfectly. That's its entire purpose. Build-green
-is not provenance.
+slopsquatted package restores perfectly, by design. A green build tells you
+nothing about provenance.
 
 ## Running the scan
 
@@ -86,7 +86,7 @@ does not catch is everything that is a string or a convention:**
 - **Configuration keys** — `Configuration["Foo:Bar"]`, `appsettings.json`
   sections, environment variable names. A wrong key silently binds to
   `null`/default and the feature quietly does nothing. Grep the key against
-  where it is *bound*, not just where it is read.
+  where it is *bound*, as well as where it is read.
 - **MSBuild properties** — an invented `<SomeProperty>` in a `.csproj` is
   silently ignored. It looks configured. It isn't.
 - **Analyzer / diagnostic ids** — `#pragma warning disable CS9999` or a

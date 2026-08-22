@@ -25,8 +25,8 @@ against untouched files needs to know immediately that this was deliberate.
 
 Diff mode stages mechanical fixes because the user wants to see the result.
 Repo-wide, the same behaviour produces a 10,000-line diff across 300 files
-that nobody can review — which is exactly the artifact v-review refuses to
-accept from other people. Applying it to yourself is not an exception.
+that nobody can review, the same artifact v-review refuses to accept from
+other people. Applying it to yourself is not an exception.
 
 What to produce instead: a prioritised plan, plus **one exemplar fix per
 theme** if asked. The exemplar proves the pattern and makes the rest
@@ -72,9 +72,9 @@ Two things change in this mode:
   compares a handful of changed files; here it finds clone *clusters* across
   the whole codebase, which is the real duplication picture.
 - **`literal-scan.sh` truncates at 40 reported literals and says so.** Do not
-  paper over that line — a truncated scan reported as complete is the exact
-  failure mode this skill exists to prevent. Re-run scoped to a subdirectory
-  if you need the rest.
+  paper over that line. A truncated scan described as complete is worse than
+  no scan, because it closes a question it never actually answered. Re-run
+  scoped to a subdirectory if you need the rest.
 
 ### 4. Aggregate into themes, not findings
 
@@ -119,8 +119,8 @@ and those are opposite facts.
   pre-existing, so it is a theme ("three `HttpClient` registrations, three
   different timeout policies"), not a finding.
 - **#3a sibling pairwise diff** — transfers well and gets *better* at repo
-  scale: compare all N implementations of the same interface, not just the
-  ones in a diff.
+  scale: compare all N implementations of the same interface, rather than
+  only the ones a diff happens to touch.
 
 ## Hunts that only exist at repo scale
 

@@ -12,9 +12,9 @@
 #
 # WHY THIS IS NOT PARANOIA: current frontier models hallucinate package names
 # in roughly 4.6%-6.1% of package-bearing answers, and ~43% of hallucinated
-# names REPEAT across queries — which makes them predictable enough for an
-# attacker to pre-register. `dotnet restore` succeeding proves nothing: a
-# slopsquatted package resolves fine. That is the whole point of it.
+# names REPEAT across queries, which makes them predictable enough for an
+# attacker to register in advance. `dotnet restore` succeeding proves nothing,
+# because a slopsquatted package is built to resolve cleanly.
 #
 # Scope: <PackageReference> and <PackageVersion> elements added in .csproj /
 # .props / .targets files. Network access is required for the nuget.org
@@ -65,12 +65,11 @@ cd "$REPO_ROOT"
 
 PROJ_PATHS=( '*.csproj' '*.props' '*.targets' '*.fsproj' '*.vbproj' )
 
-# Same working-tree fallback as the other scans: v-review is used on staged and
-# uncommitted diffs, and silently reporting "nothing to scan" over a dirty tree
-# is exactly the quiet miss this skill exists to prevent.
+# Same working-tree fallback as the other scans. A dependency added to an
+# uncommitted .csproj needs checking before it is committed, not after.
 DIFF_RANGE="$BASE_REF...HEAD"
 if [ "$BASE_IS_COMMIT" -eq 0 ]; then
-  # A tree-ish has no history tothree-dot against; a two-dot diff against the
+  # A tree-ish has no history to three-dot against; a two-dot diff against the
   # working tree is the whole-repo view.
   DIFF_RANGE="$BASE_REF"
   echo "mode: WHOLE-REPO audit — every tracked line counts as new" >&2

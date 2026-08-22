@@ -97,14 +97,13 @@ CS_EXCLUDES=(
 CS_SCOPE=( "${CS_PATHS[@]}" "${CS_EXCLUDES[@]}" )
 
 # Diff range. Default is BASE...HEAD (committed work only), matching scope.sh.
-# But v-review is explicitly used on staged + uncommitted diffs too, so when
-# BASE...HEAD is empty and the working tree is dirty, fall back to comparing
-# the merge-base against the working tree and say so. Silently reporting
-# "nothing to scan" over a dirty tree is exactly the kind of quiet miss this
-# skill exists to prevent.
+# v-review also runs against staged and uncommitted work, so when BASE...HEAD
+# is empty and the tree is dirty, compare the merge-base against the working
+# tree instead and print a note saying so. A duplicate that only exists in an
+# uncommitted file is still a duplicate.
 DIFF_RANGE="$BASE_REF...HEAD"
 if [ "$BASE_IS_COMMIT" -eq 0 ]; then
-  # A tree-ish has no history tothree-dot against; a two-dot diff against the
+  # A tree-ish has no history to three-dot against; a two-dot diff against the
   # working tree is the whole-repo view.
   DIFF_RANGE="$BASE_REF"
   echo "mode: WHOLE-REPO audit — every tracked line counts as new" >&2
@@ -238,7 +237,7 @@ while IFS= read -r sig; do
   name=$(printf '%s' "$sig" | sed -E 's/^[^ ]+[[:space:]]+([A-Za-z0-9_]+)\(.*/\1/')
   [ "$ret" = "$name" ] && continue
 
-  # Parameter TYPES only — the names are exactly what differs between clones.
+  # Parameter TYPES only. Names are the part that differs between clones.
   ptypes=$(printf '%s' "$sig" \
     | sed -E 's/^[^(]*\((.*)\)$/\1/' \
     | tr ',' '\n' \
