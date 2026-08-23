@@ -203,6 +203,24 @@ The risk: any future `[Marker]`-tagged type added anywhere — including in test
 
 `TryParse`, `TryGetValue`, `TryExecuteAsync` — if the method now propagates exceptions instead of returning `false`, drop the `Try` prefix. Same for `Maybe*`, `Optional*`, `Safe*` wrappers that aren't safe.
 
+### 12a. Names that abbreviate for nothing, or lie about the type
+
+The C# lens on hunt list #27. Two failures:
+
+**Abbreviation the language never forced.** `Cols`, `Ctx`, `Cfg`, `Req`, `Res`, `Tmp`, `Val`, `Idx`, `Mgr`, `Svc`, `Attrs`, `Prev`, `Cnt`. Allowed: established domain vocabulary (`Id`, `Url`, `Http`, `Sql`, `Db`, `Utc`, `Api`, `Json`), loop indices (`i`, `j`), and terms of art the codebase already uses consistently. Not allowed as a defence: "it was shorter."
+
+**Names that misdescribe the type or the role.**
+
+- Type-lying suffixes: `ColList` holding a comma-joined `string`, `userMap` holding a `List<>`, `Items` holding one item, `Count` holding a `bool`.
+- Wrong-domain words: `Mutable` naming the columns an upsert overwrites, in a codebase built on `sealed record`s.
+- Stutter: `SetSql.ColumnsSql`, `UserService.UserServiceOptions`.
+- Test-only members on production types: `ColumnsForTest`, `InternalsForTesting`. Use `InternalsVisibleTo` and let the test read the real member — this pairs with the §14 visibility sweep.
+- Names that only parse if you already know one library's idiom: `ConflictAssignments` for the `SET` block of an `ON CONFLICT DO UPDATE`; `OverwriteWithIncoming` says what happens.
+
+The check: read the identifier alone, no type and no initializer. If you cannot say what it holds, or you would guess the wrong type, rename. A name that needs a comment to be understood is a naming finding, not a comment opportunity.
+
+Not this rule: taste. `GetUser` vs `FetchUser`, `userId` vs `id`. Flag only where the name withholds information or points at the wrong thing. Usually **LOW**; **MEDIUM** when it is in a signature others call, because it propagates to every call site.
+
 ### 13. Useless using directives + sloppy imports
 
 Walk the diff for unused `using` statements (LSP flags them; clean while you're in the file). Same for unused NuGet packages added but never referenced.
