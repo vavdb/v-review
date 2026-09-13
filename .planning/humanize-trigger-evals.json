@@ -1,0 +1,20 @@
+[
+  {"query": "humanize this: 'In today's fast-paced digital landscape, it is crucial for organizations to delve into the multifaceted tapestry of customer needs. Furthermore, it's worth noting that...'", "should_trigger": true},
+  {"query": "does this README section sound like AI wrote it? 'This comprehensive guide will walk you through the seamless setup process. Let's dive in!'", "should_trigger": true},
+  {"query": "review this LinkedIn post before I publish it. 'I wasn't going to share this but... 3 years ago I lost everything. Here's what nobody tells you about failure. Agree?'", "should_trigger": true},
+  {"query": "make this email sound like me, not a bot: 'I hope this email finds you well. I wanted to reach out regarding the Q3 roadmap. Please don't hesitate to reach out at your earliest convenience.'", "should_trigger": true},
+  {"query": "is this slop? paste: 'It's not about the tooling. It's about the mindset. Read that again.'", "should_trigger": true},
+  {"query": "rewrite the error messages in Resources/Strings.resx so they sound like the rest of the app, they're all 'Oops! Something went wrong 😅' right now", "should_trigger": true},
+  {"query": "voice check on my blog draft at docs/blog/2026-09-agents.md, I have a sample of my own writing in docs/blog/2025-01-intro.md", "should_trigger": true},
+  {"query": "this PR body reads like ChatGPT wrote it, can you fix it: 'This PR leverages best practices to ensure robust and scalable handling of...'", "should_trigger": true},
+  {"query": "tighten this slack message: 'Hi team! Just wanted to flag that I might be wrong but I think the deploy may possibly have an issue, sorry to bother everyone 🙏🚀'", "should_trigger": true},
+  {"query": "remove the AI slop from CHANGELOG.md, every entry says 'enhanced' and 'streamlined'", "should_trigger": true},
+  {"query": "review this branch before I push, it's the auth migration in Program.cs", "should_trigger": false},
+  {"query": "translate this paragraph to Dutch", "should_trigger": false},
+  {"query": "proofread this for spelling and grammar only, don't change the wording", "should_trigger": false},
+  {"query": "write me a blog post about EF Core migrations", "should_trigger": false},
+  {"query": "summarize this article in three bullets", "should_trigger": false},
+  {"query": "is this C# method idiomatic? public async Task<List<Order>> GetOrders() { ... }", "should_trigger": false},
+  {"query": "what's the reading level of this paragraph? just the number", "should_trigger": false},
+  {"query": "convert this markdown doc to a Word file", "should_trigger": false}
+]

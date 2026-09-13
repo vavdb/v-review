@@ -9,7 +9,7 @@ refactor" — anything that is **not** scoped to a diff.
 Diff mode asks: *should this change land?* Audit mode asks: *what is true
 about this codebase, and what should we do about it first?*
 
-Same 26 hunts, different unit of output, and **three rules invert**:
+Same 28 hunts, different unit of output, and **three rules invert**:
 
 | Diff mode | Audit mode |
 |---|---|
@@ -121,6 +121,14 @@ and those are opposite facts.
 - **#3a sibling pairwise diff** — transfers well and gets *better* at repo
   scale: compare all N implementations of the same interface, rather than
   only the ones a diff happens to touch.
+- **#28 AI-slop prose** — transfers as a theme, not per-string findings.
+  No PR body to read, but every `README`, `docs/`, `.resx`, i18n `.json`,
+  and user-visible error string is pre-existing and in scope. Probe first,
+  then dispatch `prose-reviewer` on the hotspots:
+  `grep -rilE 'delve|tapestry|crucial|furthermore|shifting landscape|worth noting|let.s dive in|oops' --include='*.md' --include='*.resx' --include='*.json' --include='*.razor' .`
+  Report as one theme ("41 user-facing strings open with 'Oops', three
+  different apology registers across `.resx` files"), three exemplars, and
+  the canonical register to converge on.
 
 ## Hunts that only exist at repo scale
 

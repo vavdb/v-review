@@ -9,8 +9,8 @@ A current-check review asks *does it work today?* — builds, tests, demo. A fut
 Activated when you ask Claude to **review a branch, PR, commit, or staged diff**. v-review then:
 
 1. Reads the project's `CLAUDE.md`, `AGENTS.md`, and any `.claude/rules/` files so project conventions override anything in the skill.
-2. Dispatches the right specialist subagents in parallel — `security-reviewer` when auth is touched, `code-reviewer` as an independent second opinion, language-specific reviewers (`csharp-reviewer`, `typescript-reviewer`, etc.), `database-reviewer` for migrations, and chains `differential-review`, `finding-duplicate-functions`, `insecure-defaults`, `semgrep`, `codeql` where the diff signals warrant it.
-3. Walks a 27-item hunt list — silent catches, unjustified additions, boolean-flag API smells, redundant DI registrations, parallel-instance configuration drift, duplicated/re-invented helpers, semantic duplicate functions, **near-duplicate clones** (the 80%-identical function that differs by one param or one null check), framework-primitive re-implementations, domain-language drift, dead code, missing `sealed`, mis-named `Try*` methods, hand-edited generated artifacts (migrations, lockfiles), useless imports, the full security checklist, leftover artifacts, architecture-doc/code contradictions, **over-terseness**, **names that abbreviate for nothing or lie about their type** (`Cols`, `ColList` holding a string), **string literals where a constant already exists** (`"nl"` instead of `CultureInfo`, a policy name typed twice), **change-narration** (comments and PR bodies that say what changed instead of what the thing does), **requirement fidelity** (did the diff implement the ticket, or a plausible adjacent problem?), **quality-gate weakening** (`continue-on-error`, `|| true`, suppressed analyzers, lowered coverage), **dependency provenance** (hallucinated and slopsquatted packages), and **test integrity** — tests that assert nothing but that LINQ exists or that 2+2=4, failure paths never exercised, and failures explained away as "known flaky" or "unrelated to my change".
+2. Dispatches the right specialist subagents in parallel — `security-reviewer` when auth is touched, `code-reviewer` as an independent second opinion, language-specific reviewers (`csharp-reviewer`, `typescript-reviewer`, etc.), `database-reviewer` for migrations, `prose-reviewer` for docs and user-facing strings, and chains `differential-review`, `finding-duplicate-functions`, `insecure-defaults`, `semgrep`, `codeql` where the diff signals warrant it.
+3. Walks a 28-item hunt list — silent catches, unjustified additions, boolean-flag API smells, redundant DI registrations, parallel-instance configuration drift, duplicated/re-invented helpers, semantic duplicate functions, **near-duplicate clones** (the 80%-identical function that differs by one param or one null check), framework-primitive re-implementations, domain-language drift, dead code, missing `sealed`, mis-named `Try*` methods, hand-edited generated artifacts (migrations, lockfiles), useless imports, the full security checklist, leftover artifacts, architecture-doc/code contradictions, **over-terseness**, **names that abbreviate for nothing or lie about their type** (`Cols`, `ColList` holding a string), **string literals where a constant already exists** (`"nl"` instead of `CultureInfo`, a policy name typed twice), **change-narration** (comments and PR bodies that say what changed instead of what the thing does), **requirement fidelity** (did the diff implement the ticket, or a plausible adjacent problem?), **quality-gate weakening** (`continue-on-error`, `|| true`, suppressed analyzers, lowered coverage), **dependency provenance** (hallucinated and slopsquatted packages), and **test integrity** — tests that assert nothing but that LINQ exists or that 2+2=4, failure paths never exercised, and failures explained away as "known flaky" or "unrelated to my change" — and **AI-slop prose** in README / docs / UI strings / error messages / PR bodies (banned words, meta-commentary, recap endings, hedged claims, "Oops! Something went wrong").
 4. Applies mechanical fixes, runs build + targeted tests, then **stages the result with `git add` and stops**. The author reviews staged diffs before they land — committing eagerly turns review into post-mortem.
 5. Returns a `Was → Now` table per finding, severity tags (CRITICAL/HIGH/MEDIUM/LOW), unfixed-but-flagged issues, considered-but-deliberately-left calls with one-sentence reasoning, the skills + subagents invoked with headline outputs, and the exact build + test commands run with pass/fail.
 
@@ -37,7 +37,7 @@ All three print **candidate** lists, not findings — every hit still needs both
 
 ### Whole-repo audit mode
 
-Point it at a codebase instead of a diff — "audit this repo", "where's the tech debt", "survey before we refactor", "I'm onboarding, what's here". Same 26 hunts, different output: aggregated **themes** (count, three exemplars, blast radius, fix order) rather than per-instance findings, only CRITICAL/HIGH listed individually, and a mandatory coverage statement saying how many files were read end-to-end, how many were scanned mechanically, how many were never opened, and what the sampling method was.
+Point it at a codebase instead of a diff — "audit this repo", "where's the tech debt", "survey before we refactor", "I'm onboarding, what's here". Same 28 hunts, different output: aggregated **themes** (count, three exemplars, blast radius, fix order) rather than per-instance findings, only CRITICAL/HIGH listed individually, and a mandatory coverage statement saying how many files were read end-to-end, how many were scanned mechanically, how many were never opened, and what the sampling method was.
 
 Three of the skill's rules invert in this mode — "pre-existing code is out of scope" chief among them, since pre-existing code is the entire subject — and it **does not apply fixes**, because a repo-wide mechanical fix is a 10,000-line diff nobody can review. It produces a prioritised plan plus one exemplar fix per theme.
 
@@ -62,7 +62,7 @@ The repository ships its own single-plugin marketplace, so a one-liner resolves 
 /plugin install vavdb/v-review
 ```
 
-This clones the repo, registers the `vavdb` marketplace, installs the `v-review` plugin, and exposes the bundled subagents (`csharp-reviewer`, `database-reviewer`, `database-schema-reviewer`, `playwright-test-reviewer`, `security-reviewer`) without further steps. Restart Claude Code if it doesn't pick the plugin up immediately.
+This clones the repo, registers the `vavdb` marketplace, installs the `v-review` plugin, and exposes the bundled subagents (`csharp-reviewer`, `database-reviewer`, `database-schema-reviewer`, `playwright-test-reviewer`, `security-reviewer`, `prose-reviewer`) and the standalone `humanize` skill without further steps. Restart Claude Code if it doesn't pick the plugin up immediately.
 
 ### Manually (clone + symlink)
 
@@ -137,6 +137,28 @@ Trigger v-review with any of:
 - "look at the diff"
 - as a pre-push or pre-merge gate from your workflow scripts
 
+## The `humanize` skill
+
+Ships alongside v-review as a second, standalone skill: `/humanize`. Paste a draft (blog post, README section, error message, PR body, LinkedIn post, email, Slack message) and it edits the text so it reads like a person wrote it, without changing what it says. Or ask "does this sound like AI?" and it names the patterns with exact quotes, no rewrite, no authorship verdict.
+
+Five hard rules, checked on every output and reported by number: direct and punchy; no meta-commentary ("Let's dive in", "It's worth noting"); banned words (`delve`, `tapestry`, `crucial`, `furthermore`, `shifting landscape`, `it is worth noting`); no recap conclusion; speak with conviction. Under those: a 52-entry pattern catalogue merged from [blader/humanizer](https://github.com/blader/humanizer) (Wikipedia's *Signs of AI writing*), [petergyang/no-ai-slop](https://github.com/petergyang/no-ai-slop) (editing principles, portability test), [numen-tech/slopornot](https://github.com/numen-tech/slopornot) (artifact tells), and a LinkedIn / email / Slack channel layer with scoring and a review report. A false-positive guard so it does not flatten real writing: clusters count, single tells do not; the writer's voice sample beats every rule except the five above.
+
+`prose-reviewer` is the same skill in embedded mode, pointed at the words in a diff.
+
+Layout:
+
+```
+skills/humanize/
+  SKILL.md                      # hard rules, modes, workflow, channel detection, voice, output
+  eval.md                       # 28-item self-check run before returning any text
+  references/
+    patterns-core.md            # 44 core patterns + 8 artifact tells, numbered
+    patterns-channel.md         # LinkedIn / email / Slack markers, scoring, review report
+    principles.md               # how to edit: minimum effective edit, UI copy, docs, PR bodies
+    false-positives.md          # what not to flag, human details to keep
+    banned-words.md             # three tiers
+```
+
 ## Project supplements
 
 The skill is intentionally project-agnostic. Project-specific rules (UI styleguide, framework-specific anti-patterns, test patterns, banned terminology, etc.) belong in your repo, not in this skill. v-review reads them on every invocation.
@@ -203,6 +225,7 @@ Subagent availability depends on your setup — they're typically defined in `~/
 | `database-schema-reviewer` | ✅ Yes (`agents/database-schema-reviewer.md`) | **Schema design** — field types, indexes (FK indexes strict, others advisory), constraints, normalization, migration safety, multi-tenant gating, soft-delete patterns, vendor-specific quirks (Azure SQL / PG / MySQL). Fires on migrations / `*Configuration.cs` / `*ModelSnapshot.cs` / `.sql` DDL. **Distinguishes strict findings from advisory options** — schema decisions warrant trade-off framing, not verdicts. Pairs with `database-reviewer`. |
 | `playwright-test-reviewer` | ✅ Yes (`agents/playwright-test-reviewer.md`) | **E2E test discipline** for Playwright suites driving Blazor Server + MudBlazor. Bans force clicks / shotgun timeouts / retry loops / silent catches / `networkidle` / bare `page.goto`. Enforces semantic-selector hierarchy, fixture imports from project fixtures (not `@playwright/test` directly), after-action assertions, MudBlazor timing patterns (`fill + Tab`, snackbar wait before goto), test/component `data-testid` consistency. Fires on `tests/**/*.spec.ts`, `*-fixtures.ts`, `playwright.config.ts`. Pairs with `csharp-reviewer` on the markup side. |
 | `security-reviewer` | ✅ Yes (`agents/security-reviewer.md`) | **Mandatory security pass** with cascade analysis. Walks v-review SKILL.md §16 (UI-only authz across razor + service + controller, parallel-instance auth config drift with full consumer-cascade, audit-field source, SQL parameterisation, file upload validation, multi-tenant scope, CSRF / antiforgery, XSS via `MarkupString`, secrets in source, weak crypto / RNG, shown-once API-key contracts, data-destructive migrations). Strict by default; dispatches semgrep / codeql / insecure-defaults in parallel where available rather than duplicating pattern matching. Fires whenever the diff touches auth / input / DB / file / external API / crypto / payment / secrets. |
+| `prose-reviewer` | ✅ Yes (`agents/prose-reviewer.md`) | **User-facing text and documentation** (hunt #28). README / docs / changelog / ADR prose, doc comments on public surface, UI strings (`.razor` markup, `.resx`, i18n `.json`, toasts, validation and exception messages a user sees), PR body and commit messages. Applies the bundled `humanize` skill in embedded mode: five hard rules (direct, no meta-commentary, banned words, no recap ending, conviction), the AI-writing pattern catalogue, UI-copy rules (name the thing, name the fix, no "Oops", no internals), localization-sibling check. Fires on any prose change and always on the PR body. Words only, never code. |
 | `code-reviewer` | ❌ No — install separately | General code quality — independent second opinion after the skill's own pass. |
 | `silent-failure-hunter` | ❌ No — install via Anthropic's `pr-review-toolkit` plugin | Second opinion **specifically on hunt #1** (silent catches / exception theatre / inappropriate fallback). Same posture as v-review on this category. Strong companion when the diff includes try/catch or fallback logic. |
 | `comment-analyzer` | ❌ No — install via Anthropic's `pr-review-toolkit` plugin | Second opinion **specifically on hunt #2** (comment accuracy + comment rot). Verifies claims against the code. Especially valuable for XML doc comments on public API surface, which are part of the contract — lying docs are worse than no docs. |
@@ -211,11 +234,12 @@ Subagent availability depends on your setup — they're typically defined in `~/
 | `typescript-reviewer` / `python-reviewer` / etc. | ❌ No — install separately | Stack-specific anti-patterns matched to the diff's primary language. |
 | `aws-reviewer` / `gcp-reviewer` | ❌ No — install separately | IaC, IAM, deploy configs. |
 
-If a recommended subagent doesn't exist in your environment, v-review walks the corresponding hunt-list item manually — you just lose the parallel-second-opinion benefit. The five bundled subagents ship with this plugin so the .NET + data-access + E2E + security paths don't degrade.
+If a recommended subagent doesn't exist in your environment, v-review walks the corresponding hunt-list item manually — you just lose the parallel-second-opinion benefit. The six bundled subagents ship with this plugin so the .NET + data-access + E2E + security + prose paths don't degrade.
 
 ## When NOT to use
 
-- Single-line typo, README polish, dependency bump with no code change.
+- Single-line typo, dependency bump with no code change.
+- A standalone prose draft with no diff behind it. Use `/humanize` for that (above). README and docs changes *inside a diff* are reviewed by `prose-reviewer`.
 - Diff is generated files only (model snapshots, lock files, designer.cs, code-gen output).
 - Personal-style preference where the codebase already has a consistent convention.
 
