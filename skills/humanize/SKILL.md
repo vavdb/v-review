@@ -23,7 +23,7 @@ Make the text read like one specific person wrote it, without changing what it s
 
 ## Hard rules
 
-These override every pattern file and every voice sample. Check the final text against each one before returning it. Report violations by number.
+These override every pattern file and every voice sample. Check the final text against each one before returning it. Report violations by number. The grep lists in [`eval.md`](eval.md) items 1 to 5 are the operational form of these rules; where the wording here and the grep list differ, the grep list is canonical.
 
 1. **Direct, punchy, conversational.** Short words, mostly short sentences, active voice, second person where the format allows. Say the thing. If a sentence could open with the point, it does.
 2. **No meta-commentary.** Nothing that talks about the text instead of being the text: "That's an interesting perspective", "Let's dive in", "In this article", "It's worth noting", "As you can see", "Great question". Delete, don't soften.
@@ -39,7 +39,7 @@ Pick one from the request. Default is **edit**.
 |---|---|---|
 | **edit** | text pasted, "humanize", "fix this", "make it sound human" | Full rewrite + `What changed` list + hard-rule check |
 | **detect** | "is this AI?", "does this sound like AI", "flag", "audit", "scan" | Named patterns with exact quotes and a one-line fix each. **No rewrite, no score, no verdict on authorship.** Detectors guess; named patterns are evidence the reader can check. Offer to edit afterwards. |
-| **review** | "review this post/email/draft", "score it", LinkedIn or email pasted | Channel detection + review report + scores + rewrite (see [`references/patterns-channel.md`](references/patterns-channel.md) for the report format) |
+| **review** | "review this post/email/draft", "score it", LinkedIn or email pasted | Channel detection + review report with scores + rewrite + `What changed` + hard-rule check (report format in [`references/patterns-channel.md`](references/patterns-channel.md)) |
 | **file** | a path is named | Run the edit workflow, write only the final prose back. Leave code blocks, front matter, tables of data, link targets, and inline code untouched. Reply with a short summary. |
 | **embedded** | called by another skill or agent (`v-review`, `prose-reviewer`, a commit-message task) | Findings only, in the caller's format. Never the full rewrite unless asked. |
 
@@ -49,10 +49,12 @@ Pick one from the request. Default is **edit**.
 2. **Name the job.** Who is this for, where does it run, what should the reader do after? If unclear and it changes the edit, ask one question. Otherwise assume and say so.
 3. **Detect the channel.** See [Channel detection](#channel-detection). Load the channel file only when the channel is LinkedIn, email, or Slack.
 4. **Find the voice.** Note vocabulary, sentence length, humour, bluntness, digressions, profanity, hedging habits. These are what you protect. See [Voice](#voice).
-5. **Mark patterns.** Walk [`references/patterns-core.md`](references/patterns-core.md). Weigh clusters, not single hits: one em dash is nothing; em dash + rule of three + "vibrant tapestry" + a "Conclusion" heading is a confession. Check every candidate against [`references/false-positives.md`](references/false-positives.md) before flagging.
+5. **Mark patterns.** Grep for every Tier-1 and Tier-2 entry in [`references/banned-words.md`](references/banned-words.md), then walk [`references/patterns-core.md`](references/patterns-core.md). Weigh clusters, not single hits: one em dash is nothing; em dash + rule of three + "vibrant tapestry" + a "Conclusion" heading is a confession. Check every candidate against [`references/false-positives.md`](references/false-positives.md) before flagging.
 6. **Detect mode stops here.** Report and offer to edit.
 7. **Edit, minimum effective.** Apply [`references/principles.md`](references/principles.md). Fix what is flagged, leave strong human sentences alone. State each point plainly rather than patching one phrase at a time; if a sentence stays awkward, rewrite the paragraph around its main point.
-8. **Keep every claim.** No added fact, name, number, date, quote, or source. No removed argument. If a sentence needs a detail you do not have, write `[ADD: specific example]` and say so. Fiction is exempt.
+8. **Keep every claim.** No added fact, name, number, date, quote, or source. No removed argument. Fiction is exempt.
+   **Precedence when a hard rule and this rule collide:** a hedge is framing, not a claim. "It depends on the team" keeps the condition ("when a team uses it well") and loses the hedge. "Some may argue human review is still essential" keeps the assertion ("Human review still has to happen") and loses the attribution. "Experts agree X" keeps X as the writer's own claim and loses the phantom experts. Never delete the substantive assertion underneath a hedge; delete only the hedge.
+   **Placeholders.** Where a sentence needs a detail you do not have, write `[ADD: what is missing]`. One per text by default; add more only when the gaps are unrelated claims. List every placeholder on the `Gaps:` line of the output.
 9. **Self-check against [`eval.md`](eval.md).** Every hard rule, every item. Fix and re-check until clean. Search the output for `—` and `–` and remove each one unless the voice sample uses them.
 10. **Return** per [Output](#output).
 
@@ -64,7 +66,7 @@ State the detection in the first line of the output. Default to **general prose*
 |---|---|---|
 | **General prose / blog / docs** | headings, developed paragraphs, README, changelog, ADR, XML doc comment, code comment | core patterns only |
 | **UI copy / error message** | short string, imperative, appears in a `.razor`/`.resx`/`.json` resource, a `throw new`, a validation message, a toast | core patterns + "one sentence, name the thing, name the fix" (see `principles.md` § UI copy) |
-| **LinkedIn** | one-sentence-per-line formatting, hashtags, engagement CTA ("Thoughts?"), @mentions, no headings under 3,000 chars, emoji as section markers | load `patterns-channel.md` § LinkedIn |
+| **LinkedIn** | one-sentence-per-line formatting, hashtags, engagement CTA ("Thoughts?"), @mentions, no headings under 3,000 chars, emoji as section markers or sign-off, arrow chains, "Read that again" / "Let that sink in", vulnerability or credential-stacking hook | **two or more** markers: LinkedIn, load `patterns-channel.md` § LinkedIn. **One** marker: general prose, but still apply the LinkedIn phrase-level list from that file. |
 | **Email** | Subject/To/From, greeting formula, sign-off + name, "following up", "per our conversation" | load `patterns-channel.md` § Email |
 | **Slack** | #channel, @here, shortcodes `:rocket:`, under 500 chars, no greeting or sign-off | load `patterns-channel.md` § Slack |
 
@@ -87,6 +89,8 @@ Detected as: <channel>
 ## What changed
 - <pattern name>: "<quoted original>" → what you did and why (one line each; group repeats)
 
+Gaps: <each `[ADD: …]` placeholder, or "none">
+
 ## Hard-rule check
 1 direct ✅  2 no meta ✅  3 banned words ✅  4 no recap ✅  5 conviction ✅
 (replace ✅ with the offending quote if a rule could not be satisfied without changing meaning, and say why)
@@ -94,7 +98,7 @@ Detected as: <channel>
 
 **Detect mode:** `Detected as:` line, then one line per hit: `<pattern name>: "<exact quote>" → <fix in under ten words>`. End with "Want me to edit it?"
 
-**Review mode:** the report in `patterns-channel.md`, then the rewrite, then the hard-rule check.
+**Review mode:** the report in `patterns-channel.md`, then the rewrite, then `What changed`, `Gaps:`, and the hard-rule check, same as edit mode.
 
 **File / embedded:** as described in [Modes](#modes).
 

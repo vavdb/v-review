@@ -46,4 +46,4 @@ Run on every text you produce (edit, review, file, embedded). Every item must pa
 
 ## Output shape
 
-28. Detection line present. What-changed list present (edit/review). Hard-rule check line present. Closing sentence is one sentence.
+28. Detection line present. What-changed list present (edit/review). `Gaps:` line present and matches the `[ADD: …]` placeholders in the text. Hard-rule check line present. Closing sentence is one sentence.

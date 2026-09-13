@@ -137,4 +137,4 @@ If AI-likeness is low but credibility or clarity is also low, say so explicitly:
 3. …
 ```
 
-Then the rewrite, then the hard-rule check line from `SKILL.md`.
+Then the rewrite, then `What changed`, `Gaps:`, and the hard-rule check line, as in edit mode in `SKILL.md`.

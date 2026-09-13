@@ -8,6 +8,8 @@ Three tiers. Tier 1 is absolute. Tiers 2 and 3 yield to a writer's voice sample,
 
 ## Tier 2: cut on sight unless the sample uses them
 
+When a Tier-2 word is the claim rather than the decoration ("teams feel more empowered" is about empowerment; "a robust retry policy" is decoration), replace it with the nearest plain synonym that keeps the meaning ("teams feel more in control") and note the substitution in `What changed`. Do not delete the sentence to get rid of the word.
+
 **AI vocabulary.** actually (as opener), additionally, albeit, align with, beacon, certainly, comprehensive, cultivate, cutting-edge, elevate, embark, emphasizing, empower, enduring, enhance, essentially, ever-evolving, facilitate, foster, game changer, garner, harness, holistic, interplay, intricate, journey (figurative), key (adjective), landscape (abstract), leverage (verb), meticulous, moreover, multifaceted, navigate (figurative), nuanced, paradigm, paramount, pivotal, quietly, realm, robust, seamless, showcase, streamline, supercharge, synergy, testament, transformative, typically, underscore (verb), unlock, utilize, valuable, various (as vague pluraliser), vibrant, whilst
 
 **Sales language.** boasts a, breathtaking, commitment to, exemplifies, groundbreaking, in the heart of, must-visit, natural beauty, nestled, profound, renowned, rich (figurative), stunning, world-class, best-in-class, next-gen, future-proof, revolutionary, disruptive
