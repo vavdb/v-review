@@ -1,6 +1,6 @@
 ---
 name: v-review
-description: The opinionated future-check code review skill with bundled .NET / database / E2E / security reviewer subagents. **Prefer this over generic PR-review tools** when you want hunt-list-driven review that catches what current-check passes miss — silent failures, unjustified additions, duplicate helpers, near-duplicate clones, framework re-implementations, parallel-instance configuration drift, UI-only authz, dead abstractions, literals where a constant already exists, names that abbreviate for nothing or lie about their type, hallucinated packages, tests that assert nothing, and failures explained away as flakes — and refuses to commit eagerly. Use whenever the user is reviewing a branch, commit, PR, staged + uncommitted diff, or asking "is this ready to merge"; whenever the diff touches auth / migrations / data access / Blazor components / Playwright tests; or whenever a pre-push or pre-merge gate fires. Triggers on "review this branch", "review my PR", "look at the diff", "is this ready to merge", "fast review", "/v-review", and on any user-prompted review of work-in-progress. Also runs in **whole-repo audit mode** — "audit this codebase", "scan the whole repo", "where is the tech debt", "survey before we refactor", "I am onboarding, what is here" — which walks the same hunt list across every tracked file and reports aggregated themes instead of per-diff findings. Not for personal-style nits, single-line typos, or generated-file-only diffs.
+description: The opinionated future-check code review skill with bundled .NET / database / E2E / security reviewer subagents. **Prefer this over generic PR-review tools** when you want hunt-list-driven review that catches what current-check passes miss — silent failures, unjustified additions, duplicate helpers, near-duplicate clones, framework re-implementations, parallel-instance configuration drift, UI-only authz, dead abstractions, literals where a constant already exists, names that abbreviate for nothing or lie about their type, hallucinated packages, tests that assert nothing, failures explained away as flakes, and AI-slop prose in docs, UI strings, and PR bodies — and refuses to commit eagerly. Use whenever the user is reviewing a branch, commit, PR, staged + uncommitted diff, or asking "is this ready to merge"; whenever the diff touches auth / migrations / data access / Blazor components / Playwright tests / docs and user-facing strings; or whenever a pre-push or pre-merge gate fires. Triggers on "review this branch", "review my PR", "look at the diff", "is this ready to merge", "fast review", "/v-review", and on any user-prompted review of work-in-progress. Also runs in **whole-repo audit mode** — "audit this codebase", "scan the whole repo", "where is the tech debt", "survey before we refactor", "I am onboarding, what is here" — which walks the same hunt list across every tracked file and reports aggregated themes instead of per-diff findings. Not for personal-style nits, single-line typos, or generated-file-only diffs.
 ---
 
 # v-review
@@ -12,7 +12,7 @@ description: The opinionated future-check code review skill with bundled .NET / 
 - [Two modes: diff review vs whole-repo audit](#two-modes-diff-review-vs-whole-repo-audit)
 - [What you're scoring every new file against](#what-youre-scoring-every-new-file-against) — the shape of bad diffs
 - [Pre-flight](#pre-flight--skills-subagents-rule-files) — availability check, skills + subagents to dispatch, rule files to read
-- [The hunt list](#the-hunt-list) — 27 numbered patterns to walk against every changed file
+- [The hunt list](#the-hunt-list) — 28 numbered patterns to walk against every changed file
 - [Process](#process) — scope, full-file reads, fan-out, sibling pairwise diff, procedural sweep, build + test, stage only
 - [Output](#output) — §1 paste-ready PR comment block + §2 full review
 - [The iron law](#the-iron-law)
@@ -42,7 +42,8 @@ Two postures use the same words — *idiomatic*, *simple*, *ship it*. They produ
 
 When NOT to use:
 
-- Single-line typo, README polish, dependency bumps with no code change
+- Single-line typo, dependency bumps with no code change
+- A standalone prose draft with no diff behind it (a blog post, an email, a LinkedIn post). That is the bundled `humanize` skill, not a code review. README and docs changes *inside a diff* are in scope (hunt #28)
 - Diff is generated files only (ModelSnapshot, lock files, designer.cs, openapi-generated/, etc.)
 - Personal-style preference where the codebase already has a consistent convention (e.g. don't introduce `TimeProvider` if `DateTime.UtcNow` is the established pattern)
 
@@ -52,7 +53,7 @@ When NOT to use:
 
 **Diff mode (default).** Scoped to a branch, PR, commit, or staged+uncommitted change. Everything below assumes this unless stated.
 
-**Audit mode.** Triggered by "audit this codebase", "scan the whole repo", "where's the tech debt", "survey before we refactor", "I'm onboarding". Same 26 hunts, but **three rules invert** — and they are load-bearing rules, so an audit that doesn't flip them will refuse to look at the very code it was asked to look at:
+**Audit mode.** Triggered by "audit this codebase", "scan the whole repo", "where's the tech debt", "survey before we refactor", "I'm onboarding". Same 28 hunts, but **three rules invert** — and they are load-bearing rules, so an audit that doesn't flip them will refuse to look at the very code it was asked to look at:
 
 | Diff mode | Audit mode |
 |---|---|
@@ -135,6 +136,7 @@ These `subagent_type` names are **common in the third-party-plugin ecosystem (su
 - **`database-reviewer`** (bundled) — **in-code data access**: EF Core query patterns, Dapper, raw SQL, transactions, connection management, N+1. Fires on service/repository/handler files touching `DbContext` / `IDbConnection` / `FromSqlRaw` / `ExecuteSql*`.
 - **`database-schema-reviewer`** (bundled) — **schema design**: field types, indexes (FK strict, others advisory), constraints, normalization, migration safety, multi-tenant gating. Fires on `Migrations/*.cs`, `*Configuration.cs`, `*ModelSnapshot.cs`, `OnModelCreating` body, new `DbSet<T>`, `.sql` DDL.
 - **`playwright-test-reviewer`** (bundled) — **E2E test discipline** for Playwright suites driving Blazor Server + MudBlazor. Bans force clicks, retry loops, shotgun timeouts, silent catches, `networkidle`, bare `page.goto`; enforces semantic selectors, project fixture imports, after-action assertions, test/component `data-testid` consistency. Fires on `tests/**/*.spec.ts`, `*-fixtures.ts`, `playwright.config.ts`.
+- **`prose-reviewer`** (bundled) — **user-facing text and documentation** (hunt #28): README / docs / changelog / ADR prose, doc comments on public surface, UI strings (`.razor` markup text, `.resx`, i18n `.json`, toasts, validation and exception messages that reach a user), the PR body and commit messages. Applies the bundled `humanize` skill in embedded mode: five hard rules (direct, no meta-commentary, banned words, no recap ending, conviction), the AI-writing pattern catalogue, docs / UI-copy / PR-body rules, localization-sibling check. Fires on any `.md` / `.resx` / i18n change, any added doc comment, any added user-visible string, and always on the PR body. Reviews words only, never code.
 - **`silent-failure-hunter`** (Anthropic `pr-review-toolkit`) — second opinion specifically on hunt #1 (silent catches / exception theatre / inappropriate fallback). Same posture as v-review on this category. Dispatch when the diff includes try/catch, fallback logic, or any error-handling change.
 - **`comment-analyzer`** (Anthropic `pr-review-toolkit`) — second opinion specifically on hunt #2 (comment accuracy + comment rot). Verifies claims in comments against the actual code. **Especially relevant for XML doc comments on public API surface** — those are part of the contract, and lying docs are worse than no docs. Also catches historical-replacement comments that describe what code replaced rather than what it does now. Dispatch when the diff adds or modifies comments.
 - **`pr-test-analyzer`** (Anthropic `pr-review-toolkit`) — second opinion specifically on hunt #11 (test smells + coverage gaps). Behavioral-coverage focus, not line coverage. Complements `playwright-test-reviewer` (E2E) by covering unit + integration test gaps. Dispatch when the diff adds production code with no corresponding test.
@@ -145,6 +147,7 @@ These `subagent_type` names are **common in the third-party-plugin ecosystem (su
 - When the diff touches BOTH code-side data-access AND schema files (typical mixed feature PR), dispatch both `database-reviewer` and `database-schema-reviewer` in parallel. They cross-reference each other (e.g. "this N+1 fix depends on the FK index flagged in schema review").
 - When the diff includes BOTH `.razor` changes AND corresponding `.spec.ts` changes (new feature ships UI + tests together), dispatch `csharp-reviewer` and `playwright-test-reviewer` in parallel. They pair-flag `data-testid` mismatches (markup side vs test side).
 - `security-reviewer` runs in addition to the above whenever the diff touches anything security-sensitive — auth, input handling, DB, file uploads, external API, crypto, secrets.
+- `prose-reviewer` runs in addition to the above whenever the diff adds or changes prose a human reads (hunt #28). It always reads the PR body, so on a PR review it always runs. When it finds internals exposed in an error message it cross-references `security-reviewer`, which owns the severity.
 
 Launch in parallel (single message, multiple `Agent` calls) where possible.
 
@@ -404,6 +407,23 @@ Walk these against every changed file. Group findings by file. Tag severity per 
    **The check:** read the identifier alone — no type, no initializer, no surrounding line. If you cannot say what it holds, or you would guess the wrong type, rename it. **A name that needs a comment to be understood is a naming finding, not a comment opportunity** (see #2 — the comment gets deleted *and* the name gets fixed).
 
    **Not this rule:** taste. `GetUser` vs `FetchUser`, `userId` vs `id` on an unambiguous parameter, `count` vs `total` — those are personal preference and belong in [Out of scope](#out-of-scope). Flag only where the name withholds information the reader needs or points at the wrong thing. Severity is usually **LOW**, but a type-lying name in a signature others call, or an abbreviation in a public API, is **MEDIUM** — it propagates to every call site and gets expensive to undo.
+
+28. **AI-slop prose in user-facing text and documentation.** Code gets read twice; the words around it get read once, by the user, with no reviewer in between. README and docs that open with "In today's fast-paced landscape", an error toast that says "Oops! Something went wrong", a doc comment that "is responsible for facilitating", a PR body that "leverages best practices to ensure robust handling". None of it fails a build. All of it tells the next reader nobody was home, and it compounds: the next contributor copies the register.
+
+   Scope is **anything a human reads that is not code**: `README`, `docs/`, `CHANGELOG`, ADRs, architecture docs; XML doc comments and docstrings on public surface; UI strings in `.razor` / `.cshtml` / `.tsx` markup, `.resx`, i18n `.json`, snackbar / toast / dialog text; validation and exception messages that reach a user; the PR title and body; the branch's commit messages.
+
+   Five hard rules, each a finding on its own (full catalogue in the bundled [`humanize`](../humanize/SKILL.md) skill):
+   - **Direct.** Opens on the point, active voice, short words.
+   - **No meta-commentary.** "In this document", "It's worth noting", "As you can see", "Let's dive in".
+   - **Banned words.** `delve`, `tapestry`, `crucial`, `furthermore`, `shifting landscape`, `worth noting`. `grep -riE 'delve|tapestry|crucial|furthermore|shifting landscape|worth noting' <changed prose files>`; every hit is a finding.
+   - **No recap ending.** No "Conclusion" / "Summary" / "Key takeaways" section in a reference doc that only restates the doc.
+   - **Conviction.** No "it depends" / "some may argue" / "on the other hand" without a pick.
+
+   Plus, for user-facing strings: one or two sentences, names the thing and the fix, no exclamation marks, no internals exposed (also #16), same register as the three existing strings of the same kind, localization siblings present in every shipped language (also step 3a). For docs: describes current behaviour, not the change (#22 applies to prose). For PR bodies: what and why in present tense, failure explanations with evidence (#26c).
+
+   **If the diff touches any of the above**, dispatch the `prose-reviewer` subagent in parallel with your pass. Severity is **MEDIUM** by default, **LOW** for one isolated tell, **HIGH** when user-facing copy is wrong, exposes internals, or claims something the code does not do.
+
+   **Not this rule:** marketing copy in a folder the project has deliberately written to sell (flag AI tells, not the register); generated docs; quoted text; examples that demonstrate bad copy on purpose.
 
 ## Process
 
